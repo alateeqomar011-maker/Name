@@ -6,6 +6,8 @@ export class Input {
     this.pressed = new Set();
     this.mouse = { dx: 0, dy: 0, wheel: 0, left: false, right: false, leftPressed: false, rightPressed: false };
     this.locked = false;
+    this.joy = { x: 0, y: 0, active: false };
+    this.touchLook = false;
     this.enabled = true;
     this.sensitivity = 0.0022;
     this.invertY = false;
@@ -45,7 +47,19 @@ export class Input {
     } catch (e) { /* ignore */ }
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
-  down(code) { return this.enabled && this.keys.has(code); }
+  down(code) {
+    if (!this.enabled) return false;
+    if (this.keys.has(code)) return true;
+    const j = this.joy;
+    if (!j.active) return false;
+    const t = 0.3;
+    if (code === 'KeyW') return j.y < -t;
+    if (code === 'KeyS') return j.y > t;
+    if (code === 'KeyA') return j.x < -t;
+    if (code === 'KeyD') return j.x > t;
+    if (code === 'ShiftLeft') return Math.hypot(j.x, j.y) > 0.95;
+    return false;
+  }
   hit(code) { return this.pressed.has(code); }
   endFrame() {
     this.pressed.clear();

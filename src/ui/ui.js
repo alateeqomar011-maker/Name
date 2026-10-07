@@ -48,7 +48,8 @@ export class UI {
         <div class="hotbar" id="hotbar"></div>
         <div class="xp"><div class="row"><span><b id="lvl">LV 1</b> &nbsp;<span id="ttl"></span></span><span id="xptxt"></span></div><div class="track"><div class="fill" id="xpfill"></div></div></div>
       </div>
-      <div id="photoResult" class="hidden"></div>`;
+      <div id="photoResult" class="hidden"></div>
+      <div id="lockhint" class="hidden">Mouse free — use the joystick, or click the game to look around · Esc: menu</div>`;
     this.mm = $('#mm').getContext('2d');
     this.toasts = $('#toasts');
     this._bannerT = 0;

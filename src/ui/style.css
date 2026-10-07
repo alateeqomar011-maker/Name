@@ -261,3 +261,17 @@ h4 { margin: 18px 0 8px; font-size: 12px; color: var(--muted); letter-spacing: 0
 #lorebox .card { max-width: 560px; padding: 28px 32px; background: #e9dfc6; color: #2a2318; border-radius: 4px; font-family: Georgia, serif; line-height: 1.6; box-shadow: 0 20px 60px rgba(0,0,0,0.7); }
 #lorebox h2 { font-family: var(--display); margin: 0 0 12px; letter-spacing: 0.1em; color: #5a3e1a; }
 .pointer { pointer-events: auto; }
+
+/* ---------- Virtual joystick ---------- */
+#joystick { position: fixed; left: 34px; bottom: 150px; z-index: 15; width: 140px; height: 140px; touch-action: none; cursor: grab; }
+#joystick .ring { position: absolute; inset: 0; border-radius: 50%; background: radial-gradient(circle, rgba(0,0,0,0.25), rgba(0,0,0,0.5));
+  border: 2px solid rgba(232,196,106,0.45); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+#joystick .ring span { position: absolute; font-size: 12px; color: rgba(242,236,223,0.6); }
+#joystick .n { top: 6px; left: 50%; transform: translateX(-50%); } #joystick .s { bottom: 6px; left: 50%; transform: translateX(-50%); }
+#joystick .w { left: 8px; top: 50%; transform: translateY(-50%); } #joystick .e { right: 8px; top: 50%; transform: translateY(-50%); }
+#joystick .knob { position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f5dc9a, #b8913a); box-shadow: 0 3px 10px rgba(0,0,0,0.6); transition: transform .08s; }
+#joystick.on { cursor: grabbing; }
+#joystick.on .knob { transition: none; }
+@media (max-width: 700px) { #joystick { left: 20px; bottom: 120px; width: 120px; height: 120px; } }
+#lockhint { position: absolute; left: 50%; top: 96px; transform: translateX(-50%); font-size: 12px; padding: 5px 12px; border-radius: 12px; background: rgba(0,0,0,0.55); color: var(--muted); }

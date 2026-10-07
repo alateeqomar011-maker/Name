@@ -38,6 +38,7 @@ import { PhotoMode } from './systems/photo.js';
 import { Interaction } from './systems/interact.js';
 import { FX } from './systems/fx.js';
 import { UI } from './ui/ui.js';
+import { Joystick } from './ui/joystick.js';
 
 const SAVE_KEY = 'primeval-frontier-save-v1';
 const SETTINGS_KEY = 'primeval-frontier-settings';
@@ -149,6 +150,8 @@ class Game extends Emitter {
     this.vehicles = new Vehicles(this);
     this.photo = new PhotoMode(this);
     this.interact = new Interaction(this);
+    this.joystick = new Joystick(this.input);
+    this.joystick.setVisible(false);
     await step(62, 'Raising ancient ruins…');
     this.pois = new POIs(this);
     this.pois.generate();
@@ -178,9 +181,10 @@ class Game extends Emitter {
     this.last = performance.now();
     renderer.setAnimationLoop(() => this.frame());
     this.input.onLockChange = (locked) => {
-      if (!locked && this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal && this.player.alive) this.ui.openMenu('settings');
+      const h = document.getElementById('lockhint');
+      if (h) h.classList.toggle('hidden', locked || this.state !== 'playing' || matchMedia('(pointer: coarse)').matches);
     };
-    canvas.addEventListener('click', () => { if (this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal) this.input.lock(); });
+    canvas.addEventListener('click', () => { if (matchMedia('(pointer: coarse)').matches) return; if (this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal) this.input.lock(); });
     addEventListener('keydown', (e) => { if (e.code === 'F5') { e.preventDefault(); if (this.state === 'playing') { this.save(); this.ui.notify('Game saved.', 'good'); } } });
     window.__game = this;
   }
@@ -315,7 +319,7 @@ class Game extends Emitter {
     if (I.hit('KeyJ')) ui.toggleMenu('journal');
     if (I.hit('KeyN')) ui.toggleMenu('missions');
     if (I.hit('KeyK')) ui.toggleMenu('skills');
-    if (I.hit('Escape') && ui.menuOpen) ui.closeMenu();
+    if (I.hit('Escape')) { if (ui.menuOpen) ui.closeMenu(); else if (!I.locked) ui.openMenu('settings'); }
     if (ui.menuOpen || !this.player.alive) return;
     if (I.hit('KeyV')) this.cam.toggle();
     if (I.hit('KeyP')) this.photo.toggle();
@@ -373,6 +377,7 @@ class Game extends Emitter {
     const ui = this.ui;
     this._hotkeys();
     const paused = ui.menuOpen || ui.modal;
+    this.joystick.setVisible(!paused && this.player.alive);
     if (paused) return;
     U.uTime.value += dt;
     const { wrapped } = this.clock.tick(dt);

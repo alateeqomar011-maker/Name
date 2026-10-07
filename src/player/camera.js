@@ -35,7 +35,7 @@ export class CameraRig {
     const p = g.player;
     const cam = this.camera;
     const sens = input.sensitivity * (this.fov / this.baseFov);
-    if (input.locked) {
+    if (input.locked || input.touchLook) {
       this.yaw -= input.mouse.dx * sens;
       this.pitch -= input.mouse.dy * sens * (input.invertY ? -1 : 1);
     }
