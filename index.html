@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Primordia</title>
+    <meta name="description" content="Primordia — a prehistoric open-world exploration and survival game." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" tabindex="0"></canvas>
+
+      <div id="loading" class="screen">
+        <div class="brand">
+          <div class="brand-title">PRIMORDIA</div>
+          <div class="brand-sub">A world before memory</div>
+        </div>
+        <div class="load-wrap">
+          <div class="load-bar"><div id="load-fill"></div></div>
+          <div id="load-text">Shaping the land…</div>
+        </div>
+        <div id="load-tip" class="tip"></div>
+      </div>
+
+      <div id="menu" class="screen hidden">
+        <div class="menu-inner">
+          <div class="brand">
+            <div class="brand-title">PRIMORDIA</div>
+            <div class="brand-sub">Explore · Survive · Uncover</div>
+          </div>
+          <div class="menu-buttons">
+            <button id="btn-continue" class="btn primary hidden">Continue Expedition</button>
+            <button id="btn-new" class="btn">New Expedition</button>
+            <button id="btn-settings" class="btn">Settings</button>
+            <button id="btn-controls" class="btn">Controls</button>
+          </div>
+          <div class="menu-foot">Best experienced with a mouse &amp; keyboard and a dedicated GPU · Click to capture the mouse</div>
+        </div>
+      </div>
+
+      <div id="hud" class="hidden">
+        <div id="compass"><div id="compass-strip"></div><div id="compass-marker"></div></div>
+        <div id="region-title"><div class="rt-main"></div><div class="rt-sub"></div></div>
+        <div id="crosshair"><span></span></div>
+        <div id="hitmarker"></div>
+        <div id="prompt"></div>
+        <div id="progress-ring"><svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"></circle><circle id="progress-arc" cx="18" cy="18" r="15"></circle></svg></div>
+        <div id="status"></div>
+        <div id="clock"><span id="clock-time">09:00</span><span id="clock-weather">Clear</span><span id="clock-day">Day 1</span></div>
+        <div id="vitals">
+          <div class="vital" data-k="health"><i>❤</i><div class="bar"><div></div></div></div>
+          <div class="vital" data-k="stamina"><i>⚡</i><div class="bar"><div></div></div></div>
+          <div class="vital" data-k="hunger"><i>🍖</i><div class="bar"><div></div></div></div>
+          <div class="vital" data-k="thirst"><i>💧</i><div class="bar"><div></div></div></div>
+          <div class="vital" data-k="warmth"><i>🔥</i><div class="bar"><div></div></div></div>
+          <div class="vital" data-k="oxygen"><i>◯</i><div class="bar"><div></div></div></div>
+        </div>
+        <div id="hotbar"></div>
+        <div id="toasts"></div>
+        <div id="fps"></div>
+        <div id="hint-keys">Tab Inventory · M Map · J Journal · Esc Pause</div>
+      </div>
+
+      <div id="panel-inventory" class="panel hidden">
+        <div class="panel-head"><h2>Survival Kit</h2><span class="close" data-close>×</span></div>
+        <div class="inv-layout">
+          <div class="inv-col">
+            <h3>Inventory</h3>
+            <div id="inv-grid"></div>
+            <div id="inv-detail"></div>
+          </div>
+          <div class="inv-col">
+            <h3>Crafting</h3>
+            <div id="craft-list"></div>
+          </div>
+        </div>
+        <div class="panel-foot">Click an item to assign it to the selected hotbar slot · Right-click food to eat</div>
+      </div>
+
+      <div id="panel-map" class="panel wide hidden">
+        <div class="panel-head"><h2>Field Map</h2><span class="close" data-close>×</span></div>
+        <div class="map-wrap"><canvas id="map-canvas" width="900" height="900"></canvas><div id="map-legend"></div></div>
+      </div>
+
+      <div id="panel-journal" class="panel hidden">
+        <div class="panel-head"><h2>Expedition Journal</h2><span class="close" data-close>×</span></div>
+        <div class="tabs"><button data-tab="creatures" class="active">Creatures</button><button data-tab="places">Places</button><button data-tab="secrets">Secrets</button></div>
+        <div id="journal-body"></div>
+      </div>
+
+      <div id="panel-settings" class="panel hidden">
+        <div class="panel-head"><h2>Settings</h2><span class="close" data-close>×</span></div>
+        <div class="settings-grid">
+          <label>Graphics quality
+            <select id="set-quality">
+              <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="ultra">Ultra</option>
+            </select>
+          </label>
+          <label>Dynamic resolution <input type="checkbox" id="set-dynres" /></label>
+          <label>Field of view <input type="range" id="set-fov" min="60" max="100" step="1" /><span id="set-fov-v"></span></label>
+          <label>Mouse sensitivity <input type="range" id="set-sens" min="0.2" max="3" step="0.05" /><span id="set-sens-v"></span></label>
+          <label>Invert mouse Y <input type="checkbox" id="set-invert" /></label>
+          <label>Master volume <input type="range" id="set-volume" min="0" max="1" step="0.01" /></label>
+          <label>Show FPS <input type="checkbox" id="set-fps" /></label>
+        </div>
+        <div class="panel-foot">Quality changes apply after reloading the world (the page reloads automatically and your progress is saved).</div>
+      </div>
+
+      <div id="panel-controls" class="panel hidden">
+        <div class="panel-head"><h2>Controls</h2><span class="close" data-close>×</span></div>
+        <div class="controls-grid">
+          <div><kbd>W A S D</kbd> Move</div><div><kbd>Mouse</kbd> Look</div>
+          <div><kbd>Shift</kbd> Sprint / swim fast</div><div><kbd>Space</kbd> Jump · swim up · leap off a wall</div>
+          <div><kbd>C</kbd> Crouch (stealth) · dive</div><div><kbd>W</kbd> into a cliff — Climb</div>
+          <div><kbd>E</kbd> Gather · interact · drink · eat</div><div><kbd>LMB</kbd> Use tool / attack / place</div>
+          <div><kbd>RMB</kbd> Aim spear (release LMB to throw)</div><div><kbd>R</kbd> Rotate building piece</div>
+          <div><kbd>1–8</kbd> / <kbd>Wheel</kbd> Hotbar</div><div><kbd>F</kbd> Toggle torch / lantern</div>
+          <div><kbd>Tab</kbd> Inventory &amp; crafting</div><div><kbd>M</kbd> Map · <kbd>J</kbd> Journal</div>
+          <div><kbd>Z</kbd> Sleep (in a shelter)</div><div><kbd>Esc</kbd> Pause</div>
+        </div>
+      </div>
+
+      <div id="pause" class="screen hidden">
+        <div class="menu-inner">
+          <div class="brand small"><div class="brand-title">Paused</div></div>
+          <div class="menu-buttons">
+            <button id="btn-resume" class="btn primary">Resume</button>
+            <button id="btn-p-settings" class="btn">Settings</button>
+            <button id="btn-p-controls" class="btn">Controls</button>
+            <button id="btn-save" class="btn">Save Game</button>
+            <button id="btn-quit" class="btn">Main Menu</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="death" class="screen hidden">
+        <div class="menu-inner">
+          <div class="brand small"><div class="brand-title">You did not survive</div><div class="brand-sub" id="death-cause"></div></div>
+          <div class="menu-buttons"><button id="btn-respawn" class="btn primary">Wake Again</button></div>
+        </div>
+      </div>
+
+      <div id="ending" class="screen hidden">
+        <div class="menu-inner">
+          <div class="brand small"><div class="brand-title">The Sun Gate Awakens</div></div>
+          <p class="ending-text">The four tablets lock into the henge. A column of light pierces the clouds and the ancient builders' last message unfolds across the stones: <em>"We were never the first, and we will not be the last. Guard the giants."</em></p>
+          <div class="menu-buttons"><button id="btn-ending" class="btn primary">Keep Exploring</button></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

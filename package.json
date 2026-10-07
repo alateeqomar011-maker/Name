@@ -1,0 +1,20 @@
+{
+  "name": "primordia",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Primordia - a prehistoric open-world exploration and survival game for the browser",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "vite": "^8.3.3",
+    "vite-plugin-singlefile": "^2.3.0"
+  }
+}
