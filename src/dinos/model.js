@@ -594,6 +594,35 @@ function buildWalker(spec) {
       parts.push(finishPart(coneAlong(v3(0, top - len * 0.4, z - 0.15), v3(0, 1, -0.15), len, 0.035, 4), [0.86, 0.82, 0.7], 1, (x, y, zz, o) => skinAtZ(z, o)));
     }
   }
+  if (P.backHorns) {
+    // two large horns sweeping back from the top of the skull
+    const hr = headR(0.12);
+    for (const sd of [-1, 1]) {
+      const base = headPt(P.headLen * 0.1, hr.rt * 0.75, sd * hr.rw * 0.55);
+      const dir = hd.clone().multiplyScalar(-1.0).addScaledVector(hUp, 0.6).add(v3(sd * 0.35, 0, 0)).normalize();
+      const L = P.headR * 2.2;
+      parts.push(finishPart(coneAlong(base, dir, L, P.headR * 0.28, 8, hUp.clone().multiplyScalar(L * 0.25).addScaledVector(hd, -L * 0.15)), (x, y, z) => [0.72, 0.64, 0.5], 1, rigid(head)));
+    }
+  }
+  if (P.headFan) {
+    // display fan crest on the back of the head
+    const hr = headR(0.1);
+    const c = headPt(-P.headR * 0.2, hr.rt * 0.7, 0);
+    const n = 9;
+    for (let k = 0; k < n; k++) {
+      const a = -0.9 + (k / (n - 1)) * 1.8;
+      const dir = hUp.clone().multiplyScalar(Math.cos(a)).addScaledVector(hd, -Math.sin(a) * 0.9 - 0.25).normalize();
+      const L = P.headR * (2.2 + 0.6 * Math.cos(a * 1.5));
+      const tip = c.clone().addScaledVector(dir, L);
+      const side = v3(0.0001, 0, 0);
+      parts.push(finishPart(fan([c.clone().add(side), c.clone().addScaledVector(hd, P.headR * 0.18), tip, c.clone().addScaledVector(hd, -P.headR * 0.18)]), [0.9, 0.9, 0.9], 2, rigid(head)));
+      parts.push(finishPart(coneAlong(c, dir, L * 1.02, P.headR * 0.05, 4), [0.3, 0.2, 0.12], 1, rigid(head)));
+    }
+  }
+  if (P.nasalCrest) {
+    const hr = headR(0.35);
+    parts.push(finishPart(ellipsoid(headPt(P.headLen * 0.35, hr.rt * 0.75, 0), P.headR * 0.55, P.headR * 0.45, P.headR * 0.8, 10, 7), [1, 1, 1], 0, rigid(head)));
+  }
   if (P.dorsalScutes) {
     // row of small bony scutes along neck, back and tail
     for (let z = -P.tailLen * 0.85; z < P.bodyLen + P.neckLen * 0.8; z += Math.max(0.12, P.hip * 0.07)) {
