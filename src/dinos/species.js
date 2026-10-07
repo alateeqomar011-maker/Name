@@ -1,0 +1,252 @@
+// Species definitions: anatomy parameters for the procedural rig, behaviour, habitat and lore.
+import { BIOME } from '../world/worldgen.js';
+
+const B = BIOME;
+
+export const SPECIES = {
+  trex: {
+    id: 'trex', name: 'Tyrannosaurus rex', short: 'T-Rex', diet: 'carnivore', temperament: 'aggressive',
+    length: 12.3, mass: '8,400 kg', period: 'Late Cretaceous', rarity: 4, xp: 400,
+    body: {
+      biped: true, hip: 3.3, tailLen: 5.9, tailBase: 0.72, tailRaise: 0.3, bodyLen: 2.7, hipR: 0.85, bellyR: 1.08, chestR: 0.82,
+      shoulderDY: 0.0, neckLen: 1.45, neckAngle: 38, neckR0: 0.62, neckR1: 0.5, headLen: 1.55, headR: 0.5, headH: 1.25, snoutR: 0.34,
+      headAngle: -12, width: 0.88, legThick: 0.5, armLen: 0.95, armThick: 0.09, teeth: true,
+    },
+    colors: { base: [0.36, 0.3, 0.2], belly: [0.72, 0.64, 0.5], pattern: [0.2, 0.16, 0.1], display: [0.5, 0.18, 0.1], type: 'stripes', scale: 1.1 },
+    speed: { walk: 2.6, run: 8.8 }, turn: 1.1, herd: [1, 1], health: 900, damage: 55, detect: 70,
+    biomes: [B.GRASSLAND, B.FOREST, B.JUNGLE], sound: { kind: 'roar', pitch: 0.55, len: 2.6 },
+    fact: 'The tyrant lizard king. Bite force over 35,000 newtons and binocular vision tuned for hunting. Keep your distance — and stay downwind.',
+  },
+  raptor: {
+    id: 'raptor', name: 'Velociraptor mongoliensis', short: 'Velociraptor', diet: 'carnivore', temperament: 'pack',
+    length: 2.6, mass: '20 kg', period: 'Late Cretaceous', rarity: 2, xp: 150,
+    body: {
+      biped: true, hip: 0.78, tailLen: 1.35, tailBase: 0.13, tailRaise: 0.12, bodyLen: 0.58, hipR: 0.17, bellyR: 0.2, chestR: 0.16,
+      shoulderDY: 0.03, neckLen: 0.42, neckAngle: 48, neckR0: 0.1, neckR1: 0.07, headLen: 0.3, headR: 0.085, headH: 0.95, snoutR: 0.045,
+      headAngle: -8, width: 0.85, legThick: 0.13, armLen: 0.42, armThick: 0.035, teeth: true, feathers: true, sickle: true,
+    },
+    colors: { base: [0.5, 0.36, 0.22], belly: [0.82, 0.74, 0.6], pattern: [0.22, 0.14, 0.08], display: [0.1, 0.25, 0.45], type: 'stripes', scale: 4.0 },
+    speed: { walk: 2.6, run: 13.5 }, turn: 3.2, herd: [3, 5], health: 90, damage: 14, detect: 55,
+    biomes: [B.FOREST, B.JUNGLE, B.PINEFOREST], sound: { kind: 'screech', pitch: 1.6, len: 0.9 },
+    fact: 'Feathered, fast and frighteningly smart. Velociraptors coordinate pack ambushes. The sickle claw on each foot pins prey.',
+  },
+  triceratops: {
+    id: 'triceratops', name: 'Triceratops horridus', short: 'Triceratops', diet: 'herbivore', temperament: 'defensive',
+    length: 9, mass: '9,000 kg', period: 'Late Cretaceous', rarity: 1, xp: 100,
+    body: {
+      biped: false, hip: 2.25, shoulder: 1.9, tailLen: 3.0, tailBase: 0.55, tailRaise: -0.15, bodyLen: 3.3, hipR: 0.95, bellyR: 1.25, chestR: 1.05,
+      shoulderDY: -0.25, neckLen: 0.7, neckAngle: 5, neckR0: 0.8, neckR1: 0.66, headLen: 2.0, headR: 0.74, headH: 1.0, snoutR: 0.32,
+      headAngle: -22, width: 1.05, legThick: 0.42, armThick: 0.32, frill: { r: 1.35, angle: 10 }, horns: [[0.75, 0.55, 0.32, 1.0, 0.13], [-0.75, 0.55, 0.32, 1.0, 0.13]], noseHorn: 0.35, beak: true,
+    },
+    colors: { base: [0.42, 0.36, 0.26], belly: [0.7, 0.64, 0.5], pattern: [0.28, 0.22, 0.15], display: [0.62, 0.3, 0.12], type: 'blotch', scale: 0.9 },
+    speed: { walk: 1.8, run: 7.5 }, turn: 0.9, herd: [3, 6], health: 700, damage: 45, detect: 30,
+    biomes: [B.GRASSLAND, B.FOREST], sound: { kind: 'bellow', pitch: 0.75, len: 1.6 },
+    fact: 'Three horns and a bony frill up to two metres wide. Herds circle their young when threatened — never provoke a Triceratops calf.',
+  },
+  spino: {
+    id: 'spino', name: 'Spinosaurus aegyptiacus', short: 'Spinosaurus', diet: 'piscivore', temperament: 'territorial',
+    length: 15, mass: '7,400 kg', period: 'Mid Cretaceous', rarity: 4, xp: 450,
+    body: {
+      biped: true, hip: 2.7, tailLen: 7.2, tailBase: 0.62, tailRaise: 0.15, bodyLen: 3.4, hipR: 0.72, bellyR: 0.88, chestR: 0.72,
+      shoulderDY: 0.15, neckLen: 1.9, neckAngle: 30, neckR0: 0.5, neckR1: 0.36, headLen: 1.8, headR: 0.32, headH: 1.1, snoutR: 0.15,
+      headAngle: -14, width: 0.8, legThick: 0.4, armLen: 1.5, armThick: 0.14, teeth: true, sail: { from: -2.5, to: 3.6, h: 1.9 }, paddleTail: true,
+    },
+    colors: { base: [0.34, 0.32, 0.26], belly: [0.66, 0.62, 0.52], pattern: [0.18, 0.18, 0.15], display: [0.75, 0.32, 0.18], type: 'bands', scale: 1.3 },
+    speed: { walk: 2.2, run: 7.5 }, turn: 1.0, herd: [1, 1], health: 1000, damage: 50, detect: 60, swims: true,
+    biomes: [B.SWAMP, B.RIVER, B.JUNGLE], sound: { kind: 'roar', pitch: 0.7, len: 2.2 },
+    fact: 'The largest known predatory dinosaur, a river monster with a crocodile-like snout and a towering sail. It hunts fish — and anything that wades too deep.',
+  },
+  brachio: {
+    id: 'brachio', name: 'Brachiosaurus altithorax', short: 'Brachiosaurus', diet: 'herbivore', temperament: 'docile',
+    length: 22, mass: '40,000 kg', period: 'Late Jurassic', rarity: 2, xp: 200,
+    body: {
+      biped: false, hip: 4.3, shoulder: 5.6, tailLen: 7.5, tailBase: 1.0, tailRaise: -0.4, bodyLen: 5.0, hipR: 1.45, bellyR: 1.85, chestR: 1.65,
+      shoulderDY: 1.3, neckLen: 8.8, neckAngle: 62, neckR0: 1.05, neckR1: 0.32, headLen: 1.0, headR: 0.32, headH: 0.95, snoutR: 0.2,
+      headAngle: -25, width: 0.95, legThick: 0.72, armThick: 0.62, neckSegs: 4,
+    },
+    colors: { base: [0.44, 0.44, 0.38], belly: [0.7, 0.68, 0.6], pattern: [0.32, 0.33, 0.28], display: [0.4, 0.38, 0.3], type: 'blotch', scale: 0.4 },
+    speed: { walk: 1.6, run: 4.2 }, turn: 0.45, herd: [2, 5], health: 3000, damage: 80, detect: 25,
+    biomes: [B.GRASSLAND, B.FOREST, B.JUNGLE], sound: { kind: 'bellow', pitch: 0.4, len: 3.0 },
+    fact: 'A living skyscraper. Its long forelimbs and upright neck let it browse treetops thirteen metres high. Its footsteps shake the ground.',
+  },
+  stego: {
+    id: 'stego', name: 'Stegosaurus stenops', short: 'Stegosaurus', diet: 'herbivore', temperament: 'defensive',
+    length: 8, mass: '5,000 kg', period: 'Late Jurassic', rarity: 1, xp: 100,
+    body: {
+      biped: false, hip: 2.4, shoulder: 1.45, tailLen: 3.6, tailBase: 0.5, tailRaise: 0.35, bodyLen: 2.9, hipR: 0.85, bellyR: 1.0, chestR: 0.75,
+      shoulderDY: -0.6, neckLen: 0.95, neckAngle: -20, neckR0: 0.4, neckR1: 0.25, headLen: 0.65, headR: 0.2, headH: 0.9, snoutR: 0.1,
+      headAngle: -20, width: 0.8, legThick: 0.4, armThick: 0.26, plates: { from: -2.6, to: 2.6, count: 17, size: 0.95 }, thagomizer: true,
+    },
+    colors: { base: [0.4, 0.42, 0.3], belly: [0.72, 0.7, 0.55], pattern: [0.25, 0.28, 0.18], display: [0.7, 0.35, 0.18], type: 'spots', scale: 1.4 },
+    speed: { walk: 1.5, run: 5.5 }, turn: 0.8, herd: [2, 4], health: 600, damage: 40, detect: 22,
+    biomes: [B.FOREST, B.GRASSLAND, B.PINEFOREST], sound: { kind: 'bellow', pitch: 0.95, len: 1.2 },
+    fact: 'Seventeen bony plates line its back and four spikes tip its tail — the "thagomizer". A swing can pierce predator bone.',
+  },
+  anky: {
+    id: 'anky', name: 'Ankylosaurus magniventris', short: 'Ankylosaurus', diet: 'herbivore', temperament: 'defensive',
+    length: 7, mass: '6,000 kg', period: 'Late Cretaceous', rarity: 2, xp: 150,
+    body: {
+      biped: false, hip: 1.45, shoulder: 1.3, tailLen: 2.9, tailBase: 0.45, tailRaise: 0.05, bodyLen: 2.6, hipR: 0.75, bellyR: 0.82, chestR: 0.72,
+      shoulderDY: -0.1, neckLen: 0.5, neckAngle: -5, neckR0: 0.5, neckR1: 0.42, headLen: 0.7, headR: 0.36, headH: 0.75, snoutR: 0.25,
+      headAngle: -12, width: 1.75, legThick: 0.32, armThick: 0.28, osteoderms: true, club: 0.55, headSpikes: true,
+    },
+    colors: { base: [0.42, 0.34, 0.24], belly: [0.62, 0.55, 0.42], pattern: [0.3, 0.24, 0.16], display: [0.5, 0.4, 0.26], type: 'blotch', scale: 1.5 },
+    speed: { walk: 1.3, run: 4.0 }, turn: 0.8, herd: [1, 3], health: 900, damage: 50, detect: 18,
+    biomes: [B.DESERT, B.CANYON, B.FOREST], sound: { kind: 'grunt', pitch: 0.8, len: 0.8 },
+    fact: 'A living tank. Fused armour plates cover its body and its tail club can shatter the shin of a tyrannosaur.',
+  },
+  parasaur: {
+    id: 'parasaur', name: 'Parasaurolophus walkeri', short: 'Parasaurolophus', diet: 'herbivore', temperament: 'skittish',
+    length: 9.5, mass: '2,500 kg', period: 'Late Cretaceous', rarity: 1, xp: 80,
+    body: {
+      biped: false, hip: 2.5, shoulder: 1.75, tailLen: 4.2, tailBase: 0.45, tailRaise: 0.2, bodyLen: 2.7, hipR: 0.68, bellyR: 0.82, chestR: 0.6,
+      shoulderDY: -0.15, neckLen: 1.5, neckAngle: 40, neckR0: 0.38, neckR1: 0.26, headLen: 1.0, headR: 0.25, headH: 1.05, snoutR: 0.16,
+      headAngle: -18, width: 0.8, legThick: 0.36, armThick: 0.15, crest: { len: 1.65, r: 0.1 }, duckbill: true,
+    },
+    colors: { base: [0.5, 0.42, 0.28], belly: [0.82, 0.76, 0.6], pattern: [0.36, 0.22, 0.14], display: [0.72, 0.3, 0.16], type: 'stripes', scale: 1.6 },
+    speed: { walk: 1.9, run: 9.5 }, turn: 1.4, herd: [4, 9], health: 300, damage: 10, detect: 45,
+    biomes: [B.GRASSLAND, B.SWAMP, B.FOREST], sound: { kind: 'honk', pitch: 0.9, len: 1.8 },
+    fact: 'Its hollow crest is a resonating chamber — herds call to each other with deep, haunting trumpet blasts that carry for kilometres.',
+  },
+  galli: {
+    id: 'galli', name: 'Gallimimus bullatus', short: 'Gallimimus', diet: 'omnivore', temperament: 'skittish',
+    length: 5.5, mass: '440 kg', period: 'Late Cretaceous', rarity: 1, xp: 70,
+    body: {
+      biped: true, hip: 1.75, tailLen: 2.6, tailBase: 0.24, tailRaise: 0.1, bodyLen: 1.05, hipR: 0.3, bellyR: 0.38, chestR: 0.3,
+      shoulderDY: 0.1, neckLen: 1.25, neckAngle: 58, neckR0: 0.15, neckR1: 0.08, headLen: 0.4, headR: 0.09, headH: 1.0, snoutR: 0.04,
+      headAngle: -10, width: 0.85, legThick: 0.2, armLen: 0.65, armThick: 0.045, beak: true, feathers: true,
+    },
+    colors: { base: [0.6, 0.5, 0.35], belly: [0.9, 0.86, 0.76], pattern: [0.45, 0.3, 0.2], display: [0.45, 0.25, 0.15], type: 'spots', scale: 3.0 },
+    speed: { walk: 2.4, run: 15 }, turn: 2.5, herd: [6, 12], health: 120, damage: 4, detect: 50,
+    biomes: [B.GRASSLAND, B.DESERT, B.BEACH], sound: { kind: 'chirp', pitch: 1.3, len: 0.6 },
+    fact: 'The "chicken mimic" — an ostrich-like sprinter clocked over 50 km/h. Huge flocks wheel across open plains in perfect unison.',
+  },
+  pachy: {
+    id: 'pachy', name: 'Pachycephalosaurus wyomingensis', short: 'Pachycephalosaurus', diet: 'herbivore', temperament: 'defensive',
+    length: 4.5, mass: '450 kg', period: 'Late Cretaceous', rarity: 2, xp: 120,
+    body: {
+      biped: true, hip: 1.35, tailLen: 2.0, tailBase: 0.24, tailRaise: 0.05, bodyLen: 1.1, hipR: 0.36, bellyR: 0.44, chestR: 0.34,
+      shoulderDY: 0.08, neckLen: 0.55, neckAngle: 30, neckR0: 0.2, neckR1: 0.16, headLen: 0.55, headR: 0.2, headH: 1.0, snoutR: 0.08,
+      headAngle: -20, width: 0.9, legThick: 0.18, armLen: 0.4, armThick: 0.05, dome: 0.3,
+    },
+    colors: { base: [0.48, 0.4, 0.3], belly: [0.76, 0.7, 0.58], pattern: [0.3, 0.24, 0.18], display: [0.3, 0.32, 0.5], type: 'bands', scale: 2.2 },
+    speed: { walk: 1.8, run: 9 }, turn: 1.6, herd: [2, 5], health: 220, damage: 22, detect: 32,
+    biomes: [B.MOUNTAIN, B.PINEFOREST, B.GRASSLAND], sound: { kind: 'grunt', pitch: 1.2, len: 0.7 },
+    fact: 'A 25 cm thick skull dome used for flank-butting rivals. Males duel on rocky slopes during the mating season.',
+  },
+  dilopho: {
+    id: 'dilopho', name: 'Dilophosaurus wetherilli', short: 'Dilophosaurus', diet: 'carnivore', temperament: 'aggressive',
+    length: 6.5, mass: '400 kg', period: 'Early Jurassic', rarity: 2, xp: 160,
+    body: {
+      biped: true, hip: 1.7, tailLen: 3.1, tailBase: 0.27, tailRaise: 0.15, bodyLen: 1.25, hipR: 0.33, bellyR: 0.42, chestR: 0.32,
+      shoulderDY: 0.08, neckLen: 0.85, neckAngle: 42, neckR0: 0.2, neckR1: 0.15, headLen: 0.62, headR: 0.15, headH: 1.1, snoutR: 0.07,
+      headAngle: -10, width: 0.85, legThick: 0.2, armLen: 0.7, armThick: 0.06, teeth: true, twinCrest: true,
+    },
+    colors: { base: [0.38, 0.4, 0.22], belly: [0.76, 0.72, 0.52], pattern: [0.18, 0.2, 0.08], display: [0.85, 0.35, 0.1], type: 'spots', scale: 2.5 },
+    speed: { walk: 2.2, run: 10 }, turn: 2.0, herd: [1, 2], health: 220, damage: 18, detect: 45,
+    biomes: [B.JUNGLE, B.SWAMP], sound: { kind: 'screech', pitch: 1.0, len: 1.2 },
+    fact: 'Twin bony crests crown its head — likely for display. A lithe early Jurassic hunter that stalks jungle undergrowth.',
+  },
+  allo: {
+    id: 'allo', name: 'Allosaurus fragilis', short: 'Allosaurus', diet: 'carnivore', temperament: 'aggressive',
+    length: 9.5, mass: '2,300 kg', period: 'Late Jurassic', rarity: 3, xp: 250,
+    body: {
+      biped: true, hip: 2.6, tailLen: 4.6, tailBase: 0.5, tailRaise: 0.2, bodyLen: 2.0, hipR: 0.6, bellyR: 0.78, chestR: 0.6,
+      shoulderDY: 0.05, neckLen: 1.15, neckAngle: 36, neckR0: 0.42, neckR1: 0.34, headLen: 1.1, headR: 0.32, headH: 1.15, snoutR: 0.18,
+      headAngle: -12, width: 0.82, legThick: 0.34, armLen: 1.1, armThick: 0.1, teeth: true, browHorns: true,
+    },
+    colors: { base: [0.5, 0.33, 0.22], belly: [0.78, 0.68, 0.55], pattern: [0.28, 0.16, 0.1], display: [0.75, 0.25, 0.12], type: 'stripes', scale: 1.5 },
+    speed: { walk: 2.4, run: 9.5 }, turn: 1.4, herd: [1, 2], health: 600, damage: 35, detect: 60,
+    biomes: [B.DESERT, B.CANYON, B.PINEFOREST, B.MOUNTAIN], sound: { kind: 'roar', pitch: 0.85, len: 1.8 },
+    fact: 'The apex hunter of the Jurassic. Allosaurus used its upper jaw like a hatchet, slashing prey far larger than itself.',
+  },
+  compy: {
+    id: 'compy', name: 'Compsognathus longipes', short: 'Compsognathus', diet: 'carnivore', temperament: 'scavenger',
+    length: 1.0, mass: '3 kg', period: 'Late Jurassic', rarity: 1, xp: 50,
+    body: {
+      biped: true, hip: 0.3, tailLen: 0.55, tailBase: 0.05, tailRaise: 0.06, bodyLen: 0.2, hipR: 0.065, bellyR: 0.08, chestR: 0.06,
+      shoulderDY: 0.02, neckLen: 0.16, neckAngle: 50, neckR0: 0.035, neckR1: 0.028, headLen: 0.11, headR: 0.03, headH: 1.0, snoutR: 0.014,
+      headAngle: -10, width: 0.85, legThick: 0.045, armLen: 0.12, armThick: 0.012, teeth: false,
+    },
+    colors: { base: [0.45, 0.5, 0.28], belly: [0.8, 0.8, 0.62], pattern: [0.26, 0.3, 0.12], display: [0.3, 0.35, 0.15], type: 'stripes', scale: 10 },
+    speed: { walk: 1.4, run: 7 }, turn: 4, herd: [5, 10], health: 15, damage: 3, detect: 25,
+    biomes: [B.ISLAND, B.BEACH, B.FOREST, B.JUNGLE], sound: { kind: 'chirp', pitch: 2.2, len: 0.4 },
+    fact: 'Chicken-sized scavengers that swarm carcasses. Alone they are curious; in numbers, they grow bold.',
+  },
+  iguanodon: {
+    id: 'iguanodon', name: 'Iguanodon bernissartensis', short: 'Iguanodon', diet: 'herbivore', temperament: 'docile',
+    length: 10, mass: '3,500 kg', period: 'Early Cretaceous', rarity: 1, xp: 90,
+    body: {
+      biped: false, hip: 2.6, shoulder: 1.9, tailLen: 4.4, tailBase: 0.52, tailRaise: 0.15, bodyLen: 3.0, hipR: 0.75, bellyR: 0.95, chestR: 0.72,
+      shoulderDY: -0.15, neckLen: 1.2, neckAngle: 30, neckR0: 0.45, neckR1: 0.3, headLen: 1.0, headR: 0.27, headH: 1.15, snoutR: 0.15,
+      headAngle: -22, width: 0.85, legThick: 0.4, armThick: 0.2, thumbSpikes: true, beak: true,
+    },
+    colors: { base: [0.36, 0.4, 0.3], belly: [0.72, 0.72, 0.58], pattern: [0.22, 0.26, 0.18], display: [0.4, 0.45, 0.3], type: 'bands', scale: 1.2 },
+    speed: { walk: 1.8, run: 7 }, turn: 1.0, herd: [3, 6], health: 450, damage: 20, detect: 35,
+    biomes: [B.FOREST, B.SWAMP, B.GRASSLAND], sound: { kind: 'bellow', pitch: 1.0, len: 1.3 },
+    fact: 'One of the first dinosaurs ever discovered. Its conical thumb spike was once mistaken for a nose horn.',
+  },
+  theriz: {
+    id: 'theriz', name: 'Therizinosaurus cheloniformis', short: 'Therizinosaurus', diet: 'herbivore', temperament: 'territorial',
+    length: 9.5, mass: '5,000 kg', period: 'Late Cretaceous', rarity: 5, xp: 900,
+    body: {
+      biped: true, hip: 2.9, tailLen: 2.6, tailBase: 0.6, tailRaise: 0.1, bodyLen: 2.2, hipR: 0.85, bellyR: 1.1, chestR: 0.75,
+      shoulderDY: 0.6, neckLen: 2.2, neckAngle: 55, neckR0: 0.4, neckR1: 0.22, headLen: 0.55, headR: 0.17, headH: 0.95, snoutR: 0.06,
+      headAngle: -20, width: 0.9, legThick: 0.42, armLen: 2.3, armThick: 0.13, feathers: true, scythe: true, beak: true,
+    },
+    colors: { base: [0.32, 0.28, 0.24], belly: [0.62, 0.56, 0.48], pattern: [0.48, 0.42, 0.36], display: [0.78, 0.72, 0.62], type: 'bands', scale: 1.8 },
+    speed: { walk: 1.7, run: 6 }, turn: 1.0, herd: [1, 1], health: 1100, damage: 60, detect: 35,
+    biomes: [B.JUNGLE], sound: { kind: 'bellow', pitch: 0.65, len: 1.8 },
+    fact: 'Metre-long scythe claws — the longest of any known animal — used to pull down branches. Shy, but fearsome when cornered. Extremely rare.',
+  },
+  giga: {
+    id: 'giga', name: 'Giganotosaurus carolinii', short: 'Giganotosaurus', diet: 'carnivore', temperament: 'aggressive',
+    length: 13, mass: '8,000 kg', period: 'Late Cretaceous', rarity: 5, xp: 1000,
+    body: {
+      biped: true, hip: 3.3, tailLen: 6.3, tailBase: 0.68, tailRaise: 0.3, bodyLen: 2.9, hipR: 0.8, bellyR: 1.0, chestR: 0.76,
+      shoulderDY: 0.05, neckLen: 1.5, neckAngle: 34, neckR0: 0.58, neckR1: 0.46, headLen: 1.8, headR: 0.42, headH: 1.3, snoutR: 0.24,
+      headAngle: -10, width: 0.78, legThick: 0.48, armLen: 1.15, armThick: 0.1, teeth: true, browHorns: true,
+    },
+    colors: { base: [0.3, 0.3, 0.3], belly: [0.62, 0.58, 0.52], pattern: [0.14, 0.14, 0.15], display: [0.6, 0.15, 0.1], type: 'stripes', scale: 0.9 },
+    speed: { walk: 2.8, run: 9.5 }, turn: 1.1, herd: [1, 1], health: 1100, damage: 65, detect: 80,
+    biomes: [B.VOLCANIC, B.DESERT], sound: { kind: 'roar', pitch: 0.5, len: 3.0 },
+    fact: 'A southern titan rivalling T-Rex in size, with a longer, blade-toothed skull. Sightings are exceedingly rare — and usually brief.',
+  },
+  pteranodon: {
+    id: 'pteranodon', name: 'Pteranodon longiceps', short: 'Pteranodon', diet: 'piscivore', temperament: 'flyer',
+    length: 1.8, mass: '25 kg', period: 'Late Cretaceous', rarity: 1, xp: 80, flyer: true,
+    body: { span: 6.2, bodyLen: 1.0, crest: 0.8, beak: 1.0 },
+    colors: { base: [0.55, 0.5, 0.42], belly: [0.85, 0.82, 0.75], pattern: [0.35, 0.3, 0.25], display: [0.75, 0.3, 0.15], type: 'blotch', scale: 2.0 },
+    speed: { walk: 1, run: 18 }, turn: 1.2, herd: [3, 7], health: 60, damage: 8, detect: 30,
+    biomes: [B.BEACH, B.MOUNTAIN, B.ISLAND, B.OCEAN], sound: { kind: 'caw', pitch: 1.4, len: 0.8 },
+    fact: 'Not a dinosaur, but a flying reptile. Pteranodons glide for hours on ocean thermals, scooping fish from the waves.',
+  },
+  quetzal: {
+    id: 'quetzal', name: 'Quetzalcoatlus northropi', short: 'Quetzalcoatlus', diet: 'carnivore', temperament: 'flyer',
+    length: 5, mass: '250 kg', period: 'Late Cretaceous', rarity: 5, xp: 900, flyer: true,
+    body: { span: 11, bodyLen: 2.0, crest: 0.9, beak: 2.6 },
+    colors: { base: [0.6, 0.56, 0.5], belly: [0.9, 0.88, 0.84], pattern: [0.42, 0.25, 0.2], display: [0.85, 0.2, 0.15], type: 'blotch', scale: 1.2 },
+    speed: { walk: 1.2, run: 20 }, turn: 0.8, herd: [1, 2], health: 250, damage: 25, detect: 40,
+    biomes: [B.VOLCANIC, B.MOUNTAIN, B.SNOW], sound: { kind: 'caw', pitch: 0.7, len: 1.4 },
+    fact: 'A pterosaur as tall as a giraffe with an eleven-metre wingspan — the largest flying animal ever. Seen only over the highest peaks.',
+  },
+  mosa: {
+    id: 'mosa', name: 'Mosasaurus hoffmannii', short: 'Mosasaurus', diet: 'carnivore', temperament: 'aquatic',
+    length: 15, mass: '14,000 kg', period: 'Late Cretaceous', rarity: 4, xp: 500, aquatic: true,
+    body: { len: 15, r: 1.0 },
+    colors: { base: [0.18, 0.24, 0.3], belly: [0.78, 0.8, 0.78], pattern: [0.1, 0.14, 0.2], display: [0.2, 0.3, 0.35], type: 'countershade', scale: 1.0 },
+    speed: { walk: 3, run: 11 }, turn: 0.7, herd: [1, 1], health: 1500, damage: 70, detect: 50,
+    biomes: [B.OCEAN], sound: { kind: 'roar', pitch: 0.45, len: 2.0 },
+    fact: 'The ruler of the Primordial Sea — a marine reptile fifteen metres long. Swim far from shore at your peril; boats are much safer.',
+  },
+};
+
+export const SPECIES_LIST = Object.values(SPECIES);
+export const HERBIVORES = SPECIES_LIST.filter((s) => s.diet === 'herbivore' || s.diet === 'omnivore');
+
+// Behaviours that photographs can capture
+export const BEHAVIORS = {
+  idle: 'Resting', graze: 'Feeding', walk: 'Roaming', flee: 'Fleeing', hunt: 'Hunting', attack: 'Attacking', eat: 'Feeding on a kill',
+  drink: 'Drinking', sleep: 'Sleeping', roar: 'Roaring', fight: 'Fighting', migrate: 'Migrating', fly: 'Flying', swim: 'Swimming',
+  dead: 'Carcass', alert: 'On alert', fish: 'Fishing', call: 'Calling', defend: 'Defending',
+};

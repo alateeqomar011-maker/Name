@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Primeval Frontier</title>
+  <meta name="description" content="An open-world prehistoric survival and exploration game." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud" class="off"></div>
+  <div id="menu" class="hidden"></div>
+  <div id="fade"></div>
+  <div id="title">
+    <h1>PRIMEVAL</h1>
+    <h2>THE LOST FRONTIER</h2>
+    <div class="menu hidden" id="titleMenu">
+      <button class="btn" id="btnContinue">Continue Expedition</button>
+      <button class="btn" id="btnNew">New Expedition</button>
+      <button class="btn" id="btnQuality">Graphics: High</button>
+      <button class="btn" id="btnControls">Controls</button>
+    </div>
+    <div id="loading"><div class="bar"><div class="fill"></div></div><div class="msg">Shaping the continent…</div></div>
+    <div class="tip" id="tip"></div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+// First / third person camera controller with terrain collision, zoom and screen shake.
+import * as THREE from 'three';
+import { clamp, lerp } from '../core/noise.js';
+
+export class CameraRig {
+  constructor(game, camera) {
+    this.game = game;
+    this.camera = camera;
+    this.mode = 'third';
+    this.yaw = 0;
+    this.pitch = -0.15;
+    this.dist = 5.5;
+    this.trauma = 0;
+    this.baseFov = 70;
+    this.fov = 70;
+    this.zoomFov = null;
+    this.underwater = false;
+    this.bob = 0;
+    this._target = new THREE.Vector3();
+    this._desired = new THREE.Vector3();
+    this._look = new THREE.Vector3();
+    this.smoothPos = new THREE.Vector3();
+    this.first = true;
+  }
+
+  shake(a) { this.trauma = Math.min(1, this.trauma + a); }
+
+  toggle() {
+    this.mode = this.mode === 'first' ? 'third' : 'first';
+    this.game.ui.notify(this.mode === 'first' ? 'First-person view' : 'Third-person view', 'info', 1.5);
+  }
+
+  update(dt, input) {
+    const g = this.game;
+    const p = g.player;
+    const cam = this.camera;
+    const sens = input.sensitivity * (this.fov / this.baseFov);
+    if (input.locked) {
+      this.yaw -= input.mouse.dx * sens;
+      this.pitch -= input.mouse.dy * sens * (input.invertY ? -1 : 1);
+    }
+    this.pitch = clamp(this.pitch, -1.45, 1.45);
+    if (!p.photoMode && !g.ui.menuOpen && input.mouse.wheel && this.mode === 'third') this.dist = clamp(this.dist + input.mouse.wheel * 0.8, 2.2, p.inVehicle ? 30 : 12);
+
+    const fwd = this._look.set(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch));
+    const V = p.inVehicle;
+    const T = this._target;
+    const first = this.mode === 'first' || p.photoMode;
+    if (V) {
+      if (first) V.seatPosition(T);
+      else T.copy(V.pos).add(new THREE.Vector3(0, V.camHeight, 0));
+    } else if (g.caves.active) {
+      T.copy(p.pos).add(new THREE.Vector3(0, p.crouch ? 1.05 : 1.62, 0));
+    } else {
+      const eye = p.swimming ? 1.5 : p.crouch ? 1.05 : p.gliding ? 1.2 : 1.62;
+      T.copy(p.pos);
+      T.y += eye;
+      if (first && p.onGround && p.speed > 0.5) {
+        this.bob += dt * p.speed * 1.9;
+        T.y += Math.sin(this.bob * 2) * 0.035 * Math.min(1, p.speed / 4);
+        T.x += Math.cos(this.bob) * 0.02 * Math.cos(this.yaw);
+        T.z -= Math.cos(this.bob) * 0.02 * Math.sin(this.yaw);
+      }
+    }
+    if (first) {
+      cam.position.copy(T);
+    } else {
+      const dist = V ? Math.max(this.dist, V.camDist) : this.dist;
+      const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+      const side = V ? 0 : 0.55;
+      const D = this._desired.copy(T).addScaledVector(fwd, -dist).addScaledVector(right, -side);
+      // collide with terrain along the boom
+      let best = dist;
+      for (let i = 1; i <= 8; i++) {
+        const t = i / 8;
+        const x = lerp(T.x, D.x, t), y = lerp(T.y, D.y, t), z = lerp(T.z, D.z, t);
+        const h = g.caves.active ? g.caves.ceilingClamp(x, y, z) : g.world.getHeight(x, z) + 0.4;
+        if (y < h) { best = Math.max(0.6, dist * (t - 0.12)); break; }
+      }
+      if (g.caves.active) best = Math.min(best, g.caves.maxBoom());
+      cam.position.copy(T).addScaledVector(fwd, -best).addScaledVector(right, -side * (best / dist));
+      const hmin = g.caves.active ? -Infinity : g.world.getHeight(cam.position.x, cam.position.z) + 0.3;
+      if (cam.position.y < hmin) cam.position.y = hmin;
+    }
+    // zoom
+    let targetFov = this.baseFov;
+    if (this.zoomFov) targetFov = this.zoomFov;
+    else if (input.mouse.right && g.inventory.gear.has('binoculars') && !p.inVehicle && !g.ui.menuOpen && !g.build.active) targetFov = 14;
+    if (p.sprinting && !this.zoomFov) targetFov += 6;
+    if (V && V.speed > 15) targetFov += Math.min(12, (V.speed - 15) * 0.4);
+    this.fov = lerp(this.fov, targetFov, 1 - Math.exp(-dt * 10));
+    if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    this.binoculars = targetFov < 20 && !this.zoomFov;
+
+    this._look.copy(cam.position).add(fwd);
+    cam.lookAt(this._look);
+    // shake
+    if (this.trauma > 0) {
+      const s = this.trauma * this.trauma;
+      const t = performance.now() * 0.001;
+      cam.rotation.x += (Math.sin(t * 37) + Math.sin(t * 21)) * 0.012 * s;
+      cam.rotation.y += (Math.sin(t * 29) + Math.sin(t * 17)) * 0.012 * s;
+      cam.rotation.z += Math.sin(t * 41) * 0.015 * s;
+      cam.position.y += Math.sin(t * 53) * 0.05 * s;
+      this.trauma = Math.max(0, this.trauma - dt * 0.9);
+    }
+    const ext = g.events ? g.events.shake : 0;
+    if (ext > 0) {
+      const t = performance.now() * 0.001;
+      cam.position.x += Math.sin(t * 61) * 0.06 * ext;
+      cam.position.y += Math.sin(t * 47) * 0.05 * ext;
+      cam.rotation.z += Math.sin(t * 33) * 0.01 * ext;
+    }
+    const wl = g.caves.active ? g.caves.waterLevel(cam.position) : g.world.waterLevelAt(cam.position.x, cam.position.z);
+    this.underwater = cam.position.y < wl - 0.05;
+    cam.updateMatrixWorld();
+  }
+
+  forward(out = new THREE.Vector3()) {
+    return out.set(0, 0, -1).applyQuaternion(this.camera.quaternion);
+  }
+}
