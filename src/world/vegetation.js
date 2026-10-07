@@ -241,7 +241,10 @@ float bayer4r(vec2 p) {
     vec2 c = texture2D(uDetailN, vWorldPos.xy * 0.35).xy * 2.0 - 1.0;
     vec3 wn = normalize(nw + (vec3(0.0, a.y, a.x) * bl.x + vec3(b.x, 0.0, b.y) * bl.y + vec3(c.x, c.y, 0.0) * bl.z) * 0.9);
     normal = normalize((viewMatrix * vec4(wn, 0.0)).xyz);
-  }`);
+  }`)
+        .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+  reflectedLight.indirectSpecular *= 0.25;
+  reflectedLight.directSpecular *= 0.5;`);
     }, 'rock' + (far ? 'far' : small ? 'small' : 'near'));
     return m;
   }
@@ -511,9 +514,9 @@ float bayer4r(vec2 p) {
     list.forEach((i, n) => {
       const d = this.inst[ti].data;
       w.mask(d[i * 6], d[i * 6 + 2], mm);
-      let c = [0.42, 0.4, 0.37];
-      if (mm.canyon > 0.4) c = [0.62, 0.36, 0.22];
-      if (mm.volc > 0.5) c = [0.12, 0.11, 0.1];
+      let c = [0.2, 0.19, 0.175];
+      if (mm.canyon > 0.4) c = [0.36, 0.19, 0.11];
+      if (mm.volc > 0.5) c = [0.07, 0.065, 0.06];
       if (T.flint) c = [0.16, 0.16, 0.18];
       if (T.obsidian) c = [0.03, 0.03, 0.04];
       const v = 0.85 + hash2(i, ti) * 0.3;
@@ -586,10 +589,10 @@ float bayer4r(vec2 p) {
         if (ns.mesh.count >= ns.cap) continue;
         ns.mesh.setMatrixAt(ns.mesh.count, m);
         if (ns.kind === 'rock') {
-          let c = [0.42, 0.4, 0.37];
+          let c = [0.2, 0.19, 0.175];
           this.world.mask(x, z, mm);
-          if (mm.canyon > 0.4) c = [0.62, 0.36, 0.22];
-          if (mm.volc > 0.5) c = [0.12, 0.11, 0.1];
+          if (mm.canyon > 0.4) c = [0.36, 0.19, 0.11];
+          if (mm.volc > 0.5) c = [0.07, 0.065, 0.06];
           if (T.flint) c = [0.2, 0.2, 0.23];
           if (T.obsidian) c = [0.025, 0.025, 0.035];
           const v = 0.85 + hash2(i, ti) * 0.3;
