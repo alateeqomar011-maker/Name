@@ -411,7 +411,7 @@ function buildWalker(spec) {
     }));
     // muscle mass at the top of the limb
     const mz = prefix === 'leg' ? 1 : 0.8;
-    parts.push(finishPart(ellipsoid(j0.clone().add(v3(-Math.sign(j0.x) * thick * 0.15, -thick * 0.7, (K.z - j0.z) * 0.25)), thick * 0.85 * mz, thick * 1.6 * mz, thick * 1.25 * mz, 12, 9), [1, 1, 1], 0, (x, y, z, o) => {
+    parts.push(finishPart(ellipsoid(j0.clone().add(v3(-Math.sign(j0.x) * thick * 0.15, -thick * 0.7, (K.z - j0.z) * 0.25)), thick * 0.72 * mz, thick * 1.5 * mz, thick * 1.15 * mz, 12, 9), [1, 1, 1], 0, (x, y, z, o) => {
       const t = Math.min(1, Math.max(0, (j0.y + thick * 0.4 - y) / (thick * 3)));
       o.i[0] = parentBone; o.w[0] = 1 - t; o.i[1] = b0; o.w[1] = t; o.i[2] = o.i[3] = 0; o.w[2] = o.w[3] = 0;
     }));
@@ -559,23 +559,49 @@ function buildWalker(spec) {
     }
   }
   if (P.sail) {
+    // Membrane sail supported by neural spines; spine tips poke above the scalloped edge
     const S = P.sail;
-    const pos2 = [], idx2 = [], zs = [];
-    const n = 24;
+    const pos2 = [], idx2 = [], zs = [], cols = [];
+    const n = 60;
+    const ribs = Math.round((S.to - S.from) / 0.3);
+    const hAt = (t) => S.h * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.03)), 0.65);
     for (let k = 0; k <= n; k++) {
       const t = k / n;
       const z = S.from + (S.to - S.from) * t;
-      const y0 = topAt(z) - 0.08;
-      const h = S.h * Math.pow(Math.sin(Math.PI * Math.min(1, t * 1.05)), 0.7) * (1 + 0.06 * Math.sin(t * 40));
-      pos2.push(0, y0, z, 0, y0 + Math.max(0.05, h), z - 0.15);
-      zs.push(z, z);
+      const y0 = topAt(z) - 0.1;
+      const ribPhase = Math.abs(Math.sin(t * ribs * Math.PI));
+      const h = Math.max(0.05, hAt(t) * (0.9 + 0.1 * Math.pow(ribPhase, 6)));
+      pos2.push(0, y0, z, 0, y0 + h * 0.5, z - 0.07, 0, y0 + h, z - 0.15);
+      zs.push(z, z, z);
+      const rib = Math.pow(ribPhase, 30) > 0.5 ? 0.45 : 1;
+      cols.push(0.42 * rib, 0.38 * rib, 0.26 * rib, 1.0 * rib, 0.95 * rib, 0.9 * rib, 1.12 * rib, 1.0 * rib, 0.9 * rib);
     }
-    for (let k = 0; k < n; k++) { const a = k * 2; idx2.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    for (let k = 0; k < n; k++) {
+      const a = k * 3;
+      idx2.push(a, a + 3, a + 1, a + 1, a + 3, a + 4, a + 1, a + 4, a + 2, a + 2, a + 4, a + 5);
+    }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos2, 3));
     g.setIndex(idx2);
     g.computeVertexNormals();
-    parts.push(finishPart(g, (x, y, z) => { const rib = Math.abs(Math.sin(z * 6)) < 0.18 ? 0.55 : 1; return [rib, rib, rib]; }, 2, (x, y, z, o, i) => skinAtZ(zs[i], o)));
+    parts.push(finishPart(g, (x, y, z, i) => [cols[i * 3], cols[i * 3 + 1], cols[i * 3 + 2]], 2, (x, y, z, o, i) => skinAtZ(zs[i], o)));
+    // spine tips
+    for (let r = 0; r <= ribs; r++) {
+      const t = (r + 0.5) / (ribs + 1);
+      const z = S.from + (S.to - S.from) * t;
+      const top = topAt(z) - 0.1 + hAt(t);
+      const len = 0.12 + hAt(t) * 0.12;
+      parts.push(finishPart(coneAlong(v3(0, top - len * 0.4, z - 0.15), v3(0, 1, -0.15), len, 0.035, 4), [0.86, 0.82, 0.7], 1, (x, y, zz, o) => skinAtZ(z, o)));
+    }
+  }
+  if (P.dorsalScutes) {
+    // row of small bony scutes along neck, back and tail
+    for (let z = -P.tailLen * 0.85; z < P.bodyLen + P.neckLen * 0.8; z += Math.max(0.12, P.hip * 0.07)) {
+      if (P.sail && z > P.sail.from && z < P.sail.to) continue;
+      const r = ringAtZ(z);
+      const sz = Math.max(0.03, r.rt * 0.22);
+      parts.push(finishPart(coneAlong(v3(0, r.y + r.rt * 0.92, z), v3(0, 1, -0.3), sz * 1.6, sz * 0.6, 4), [0.3, 0.26, 0.18], 1, (x, y, zz, o) => skinAtZ(z, o)));
+    }
   }
   if (P.plates) {
     const S = P.plates;
@@ -845,8 +871,13 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           float pat = 0.0;
           vec2 q = vec2(vBind.z * s, vBind.y * s + vBind.x * s * 0.5);
           if (uPatType == 0) {
-            float w = sin(vBind.z * s * 3.2 + fbm3(q * 1.5) * 3.0 + abs(vBind.x) * s * 0.8);
-            pat = smoothstep(0.25, 0.65, w) * smoothstep(-0.2, 0.5, vBindN.y + 0.25);
+            // irregular tiger-like bands that wrap down the flanks and ring the tail
+            float w = sin(vBind.z * s * 4.2 + fbm3(q * 1.3) * 4.5 + vBind.y * s * 0.7);
+            float breakup = smoothstep(0.25, 0.55, fbm3(q * 2.6 + 7.0));
+            pat = smoothstep(0.3, 0.72, w) * mix(0.55, 1.0, breakup) * smoothstep(-0.6, 0.15, vBindN.y);
+            // pale cream speckles on the back and flanks
+            float spk = smoothstep(0.78, 0.86, vnoise(vec2(vBind.z, vBind.y + vBind.x) * s * 16.0)) * aa1;
+            col = mix(col, uBelly * 1.1, spk * 0.35 * top);
           } else if (uPatType == 1) {
             pat = smoothstep(0.62, 0.7, vnoise(vec2(vBind.z * s * 2.4 + vBind.x * s * 1.7, vBind.y * s * 2.4)));
             pat *= top;
@@ -857,7 +888,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           } else {
             col = mix(uBelly, uBase, smoothstep(-0.12, 0.05, vBindN.y));
           }
-          col = mix(col, uPattern, pat * 0.85);
+          col = mix(col, uPattern, pat * (uPatType == 0 ? 0.92 : 0.85));
           col *= 0.86 + 0.24 * scaleN;
           // large-scale mottling
           col *= 0.88 + 0.24 * fbm3(vBind.zy * 0.9 + vBind.x * 0.5);
@@ -868,7 +899,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           col *= 0.9 + 0.15 * scaleN;
         } else {
           col = mix(uDisplay, uBase, 0.3) * vColor.rgb * (0.8 + 0.35 * fbm3(vBind.zy * 6.0));
-          col = mix(col, uPattern, smoothstep(0.55, 0.75, vnoise(vBind.zy * 10.0)) * 0.4);
+          col = mix(col, uPattern, smoothstep(0.6, 0.8, fbm3(vBind.zy * 3.0)) * 0.15);
         }
         col = mix(col, vec3(0.5, 0.05, 0.03), uHurt * 0.5);
         diffuseColor.rgb = col;
@@ -881,16 +912,19 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
         if (vMat < 0.5) {
           float pxB = length(fwidth(vBind)) * uSkinF;
           float hb = tri3(vBind * uSkinF * 1.3) * 0.7 * (1.0 - smoothstep(0.2, 0.5, pxB * 1.3)) + tri3(vBind * uSkinF * 3.1) * 0.3 * (1.0 - smoothstep(0.2, 0.5, pxB * 3.1));
+          // skin folds and wrinkles running around the body
+          float fold = sin(vBind.z * uSkinF * 1.1 + vnoise(vBind.xy * uSkinF * 0.35) * 4.0);
+          hb += pow(abs(fold), 6.0) * 0.6 * (1.0 - smoothstep(0.2, 0.5, pxB * 1.1));
           float bumpK = 1.0;
           vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
           float dhx = dFdx(hb), dhy = dFdy(hb);
           vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
           float det = dot(dpdx, r1);
           vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
-          normal = normalize(abs(det) * normal - grad * 0.006 * bumpK);
+          normal = normalize(abs(det) * normal - grad * 0.011 * bumpK);
         }`);
   };
-  m.customProgramCacheKey = () => 'dinoskin-v1';
+  m.customProgramCacheKey = () => 'dinoskin-v2';
   return m;
 }
 
