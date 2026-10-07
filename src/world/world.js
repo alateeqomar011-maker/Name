@@ -203,7 +203,7 @@ export class World {
           }
           case BIOME.MOUNTAIN: {
             const rk = smoothstep(120, 210, h + n1 * 30);
-            R = lerp(96, 122, rk); G = lerp(112, 118, rk); Bc = lerp(62, 110, rk);
+            R = lerp(96, 118, rk); G = lerp(112, 110, rk); Bc = lerp(62, 98, rk);
             break;
           }
           case BIOME.DESERT: case BIOME.CANYON: {
@@ -231,7 +231,7 @@ export class World {
         // Rock on steep slopes
         const rock = smoothstep(0.8, 0.62, ny);
         if (rock > 0 && b !== BIOME.OCEAN && b !== BIOME.RIVER) {
-          let rr = 112, rg = 108, rb = 100;
+          let rr = 108, rg = 100, rb = 90;
           if (b === BIOME.DESERT || b === BIOME.CANYON) {
             const band = Math.sin(h * 0.5 + n2) * 0.5 + 0.5;
             rr = lerp(160, 205, band); rg = lerp(84, 128, band); rb = lerp(56, 84, band);
@@ -252,6 +252,7 @@ export class World {
         if (b === BIOME.SWAMP && h < 0.3) g = 0;
         if (h < 0.4) g = 0;
         if (h > 230) g *= clamp(1 - (h - 230) / 40, 0, 1);
+        if (b === BIOME.MOUNTAIN) g *= 1 - smoothstep(110, 170, h + n1 * 30);
         gr[k] = Math.round(clamp(g, 0, 1) * 255);
       }
     }

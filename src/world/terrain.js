@@ -24,7 +24,24 @@ export function createTerrainMaterial() {
       .replace('#include <common>', `#include <common>
         varying vec3 vWPos; varying vec3 vWNormal;
         uniform float uWet; uniform float uSnow; uniform float uTime; uniform float uSnowLine;
-        ${GLSL_NOISE}`)
+        ${GLSL_NOISE}
+        vec3 triW(vec3 n){ vec3 w = pow(abs(n), vec3(4.0)); return w / (w.x + w.y + w.z); }
+        float triN(vec3 p, vec3 w){ return vnoise(p.zy) * w.x + vnoise(p.xz + 13.7) * w.y + vnoise(p.xy + 31.1) * w.z; }
+        // procedural rock: layered strata, cracks and boulder-scale mottling
+        float rockH(vec3 p, vec3 w, float fine){
+          float warp = vnoise(p.xz * 0.02) * 2.5 + triN(p * 0.09, w) * 0.8;
+          // sedimentary ledges: sawtooth layers give stepped, eroded strata
+          float layer = fract(p.y * 0.28 + warp);
+          float ledge = pow(layer, 2.5) * 0.55;
+          float thin = (sin(p.y * 2.2 + warp * 6.0) * 0.5 + 0.5) * 0.12 * fine;
+          // angular fractured plates
+          float plate = floor(triN(p * 0.22, w) * 5.0) / 5.0;
+          float big = triN(p * 0.05, w);
+          float crack = 1.0 - abs(triN(p * 0.33, w) * 2.0 - 1.0);
+          crack = smoothstep(0.94, 0.995, crack) * 0.35;
+          float grain = (triN(p * 3.1, w) - 0.5) * 0.18 * fine;
+          return ledge + thin + plate * 0.35 + big * 0.45 - crack + grain;
+        }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float camD = length(vWPos - cameraPosition);
         float detailFade = 1.0 - smoothstep(60.0, 220.0, camD);
@@ -34,6 +51,29 @@ export function createTerrainMaterial() {
         diffuseColor.rgb *= 0.78 + 0.34 * dnL;
         diffuseColor.rgb *= mix(1.0, 0.8 + 0.3 * dn + 0.12 * dn2, detailFade);
         float ny = vWNormal.y;
+        // ---- rock surfaces (steep slopes, bare mountain tops) ----
+        vec3 vc = diffuseColor.rgb;
+        float mx = max(vc.r, max(vc.g, vc.b));
+        float sat = (mx - min(vc.r, min(vc.g, vc.b))) / max(mx, 0.001);
+        float greyRock = (1.0 - smoothstep(0.38, 0.5, sat)) * smoothstep(70.0, 140.0, vWPos.y) * step(0.02, vc.g) * max(smoothstep(0.97, 0.88, ny), smoothstep(170.0, 220.0, vWPos.y));
+        float slopeRock = smoothstep(0.84, 0.64, ny);
+        float rockAmt = clamp(max(greyRock, slopeRock), 0.0, 1.0) * step(1.0, vWPos.y);
+        vec3 tw = triW(vWNormal);
+        float rockFine = 1.0 - smoothstep(80.0, 400.0, camD);
+        float rh = rockH(vWPos, tw, rockFine);
+        float crackR = smoothstep(0.94, 0.995, 1.0 - abs(triN(vWPos * 0.33, tw) * 2.0 - 1.0));
+        float layerId = floor(vWPos.y * 0.28 + vnoise(vWPos.xz * 0.02) * 2.5 + triN(vWPos * 0.09, tw) * 0.8);
+        float layerTone = hash12(vec2(layerId, 7.0));
+        vec3 rockC = vc * (0.7 + 0.5 * clamp(rh, 0.0, 1.3)) * (0.88 + 0.24 * layerTone);
+        rockC = mix(rockC, rockC * vec3(1.08, 0.98, 0.86), smoothstep(0.4, 0.8, triN(vWPos * 0.02, tw)) * 0.6);
+        rockC *= 1.0 - crackR * 0.35;
+        // lichen & moss in sheltered ledges
+        float lichen = smoothstep(0.6, 0.72, triN(vWPos * 0.55, tw)) * smoothstep(0.35, 0.75, ny) * (1.0 - smoothstep(240.0, 300.0, vWPos.y));
+        rockC = mix(rockC, vec3(0.16, 0.19, 0.1), lichen * 0.45);
+        // natural snow caps on ledges of high peaks
+        float snowCap = smoothstep(255.0, 290.0, vWPos.y + vnoise(vWPos.xz * 0.05) * 30.0) * smoothstep(0.45, 0.7, ny + rh * 0.15);
+        rockC = mix(rockC, vec3(0.86, 0.89, 0.94), snowCap);
+        diffuseColor.rgb = mix(diffuseColor.rgb, rockC, rockAmt);
         // shore: wet sand band
         diffuseColor.rgb *= mix(0.62, 1.0, smoothstep(-0.2, 1.2, vWPos.y));
         // weather snow accumulation
@@ -49,7 +89,8 @@ export function createTerrainMaterial() {
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.4, wet);
         roughnessFactor = mix(roughnessFactor, 0.03, puddle);
-        roughnessFactor = mix(roughnessFactor, 0.6, snowAmt);`)
+        roughnessFactor = mix(roughnessFactor, 0.6, snowAmt);
+        roughnessFactor = mix(roughnessFactor, 0.78 - crackR * 0.1, rockAmt);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         {
           vec2 p = vWPos.xz * 0.8;
@@ -57,11 +98,20 @@ export function createTerrainMaterial() {
           float h0 = fbm3(p), hx = fbm3(p + vec2(e, 0.0)), hz = fbm3(p + vec2(0.0, e));
           float bs = 0.55 * detailFade * (1.0 - puddle);
           vec3 nW = normalize(vWNormal + vec3(-(hx - h0) / e, 0.0, -(hz - h0) / e) * bs * 0.35);
+          // triplanar rock bump: strata ledges and cracks, visible far away
+          if (rockAmt > 0.01) {
+            float re = 0.25;
+            float r0 = rockH(vWPos, tw, rockFine);
+            vec3 g3 = vec3(rockH(vWPos + vec3(re, 0.0, 0.0), tw, rockFine) - r0, rockH(vWPos + vec3(0.0, re, 0.0), tw, rockFine) - r0, rockH(vWPos + vec3(0.0, 0.0, re), tw, rockFine) - r0) / re;
+            g3 -= dot(g3, nW) * nW;
+            float rk = rockAmt * (0.55 - 0.3 * smoothstep(300.0, 1200.0, camD));
+            nW = normalize(nW - g3 * rk);
+          }
           nW = normalize(mix(nW, vec3(0.0, 1.0, 0.0), puddle * 0.9));
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v1';
+  mat.customProgramCacheKey = () => 'terrain-v3';
   return mat;
 }
 
@@ -100,9 +150,9 @@ export class Terrain {
     const dz = Math.max(Math.abs(pz - ch.centerZ) - 128, 0);
     const d = Math.sqrt(dx * dx + dz * dz);
     const s = this.quality.viewScale;
-    if (d < LOD_DIST[0] * s * 0.45) return 0;
-    if (d < LOD_DIST[1] * s * 0.45) return 1;
-    if (d < LOD_DIST[2] * s * 0.6) return 2;
+    if (d < LOD_DIST[0] * s * 0.7) return 0;
+    if (d < LOD_DIST[1] * s * 0.85) return 1;
+    if (d < LOD_DIST[2] * s * 1.1) return 2;
     return 3;
   }
 
