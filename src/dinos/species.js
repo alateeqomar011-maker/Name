@@ -87,7 +87,7 @@ export const SPECIES = {
     length: 7, mass: '6,000 kg', period: 'Late Cretaceous', rarity: 2, xp: 150,
     body: {
       biped: false, hip: 1.45, shoulder: 1.3, tailLen: 2.9, tailBase: 0.45, tailRaise: 0.05, bodyLen: 2.6, hipR: 0.75, bellyR: 0.82, chestR: 0.72,
-      shoulderDY: -0.1, neckLen: 0.5, neckAngle: -5, neckR0: 0.5, neckR1: 0.42, headLen: 0.7, headR: 0.36, headH: 0.75, snoutR: 0.25,
+      shoulderDY: -0.1, neckLen: 0.45, neckAngle: -5, neckR0: 0.5, neckR1: 0.4, headLen: 0.56, headR: 0.42, headH: 0.66, snoutR: 0.32,
       headAngle: -12, width: 1.75, legThick: 0.32, armThick: 0.28, osteoderms: true, club: 0.55, headSpikes: true,
     },
     colors: { base: [0.42, 0.34, 0.24], belly: [0.62, 0.55, 0.42], pattern: [0.3, 0.24, 0.16], display: [0.5, 0.4, 0.26], type: 'blotch', scale: 1.5 },

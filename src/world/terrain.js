@@ -93,21 +93,22 @@ export function createTerrainMaterial(world) {
         vec3 triW(vec3 n){ vec3 w = pow(abs(n), vec3(4.0)); return w / (w.x + w.y + w.z); }
         float triN(vec3 p, vec3 w){ return vnoise(p.zy) * w.x + vnoise(p.xz + 13.7) * w.y + vnoise(p.xy + 31.1) * w.z; }
         // procedural rock: layered strata, cracks and boulder-scale mottling
-        float rockH(vec3 p, vec3 w, float fine){
+        float rockH(vec3 p, vec3 w, float fine, float strataK){
           float warp = vnoise(p.xz * 0.02) * 2.5 + triN(p * 0.09, w) * 0.8;
-          // sedimentary ledges: sawtooth layers give stepped, eroded strata
-          float layer = fract(p.y * 0.28 + warp);
-          // strata only read on steep faces; on gentle slopes they would draw contour loops
+          // sedimentary ledges (canyons, badlands) only read on steep faces; smoothed so the
+          // layer boundary never leaves a hard seam
           float steep = 1.0 - w.y;
-          float ledge = pow(layer, 2.5) * 0.55 * steep;
-          float thin = (sin(p.y * 2.2 + warp * 6.0) * 0.5 + 0.5) * 0.12 * fine * steep;
-          // angular fractured plates
+          float layer = fract(p.y * 0.28 + warp);
+          float ledge = smoothstep(0.0, 0.85, layer) * smoothstep(1.0, 0.88, layer) * 0.5 * steep * strataK;
+          float thin = (sin(p.y * 2.2 + warp * 6.0) * 0.5 + 0.5) * 0.12 * fine * steep * strataK;
+          // angular fractured plates and, for granite, tall jointed blocks
           float plate = floor(triN(p * 0.22, w) * 5.0) / 5.0;
+          float blocks = floor(triN(p * vec3(0.11, 0.045, 0.11) + 4.0, w) * 4.0) / 4.0;
           float big = triN(p * 0.05, w);
           float crack = 1.0 - abs(triN(p * 0.33, w) * 2.0 - 1.0);
           crack = smoothstep(0.94, 0.995, crack) * 0.3 * smoothstep(0.42, 0.7, triN(p * 0.06 + 3.0, w)) * (0.25 + 0.75 * steep);
           float grain = (triN(p * 3.1, w) - 0.5) * 0.18 * fine;
-          return ledge + thin + plate * 0.35 + big * 0.45 - crack + grain;
+          return ledge + thin + plate * mix(0.55, 0.35, strataK) + blocks * (1.0 - strataK) * 0.5 + big * 0.45 - crack + grain;
         }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
         float camD = length(vWPos - cameraPosition);
@@ -241,11 +242,13 @@ export function createTerrainMaterial(world) {
         float rockAmt = clamp(max(greyRock, slopeRock), 0.0, 1.0) * step(1.0, vWPos.y);
         vec3 tw = triW(vWNormal);
         float rockFine = 1.0 - smoothstep(80.0, 400.0, camD);
-        float rh = rockH(vWPos, tw, rockFine);
+        // warm red/orange rock is sedimentary (strata); grey rock is granite (joints and blocks)
+        float strataK = smoothstep(0.015, 0.09, vc.r - vc.b);
+        float rh = rockH(vWPos, tw, rockFine, strataK);
         float crackR = smoothstep(0.94, 0.995, 1.0 - abs(triN(vWPos * 0.33, tw) * 2.0 - 1.0));
         float layerId = floor(vWPos.y * 0.28 + vnoise(vWPos.xz * 0.02) * 2.5 + triN(vWPos * 0.09, tw) * 0.8);
         float layerTone = hash12(vec2(layerId, 7.0));
-        vec3 rockC = vc * (0.7 + 0.5 * clamp(rh, 0.0, 1.3)) * (0.88 + 0.24 * layerTone);
+        vec3 rockC = vc * (0.7 + 0.5 * clamp(rh, 0.0, 1.3)) * (0.88 + 0.24 * mix(0.5, layerTone, strataK));
         rockC = mix(rockC, rockC * vec3(1.08, 0.98, 0.86), smoothstep(0.4, 0.8, triN(vWPos * 0.02, tw)) * 0.6);
         crackR *= smoothstep(0.42, 0.7, triN(vWPos * 0.06 + 3.0, tw));
         rockC *= 1.0 - crackR * 0.22;
@@ -284,8 +287,8 @@ export function createTerrainMaterial(world) {
           // triplanar rock bump: strata ledges and cracks, visible far away
           if (rockAmt > 0.01) {
             float re = 0.25;
-            float r0 = rockH(vWPos, tw, rockFine);
-            vec3 g3 = vec3(rockH(vWPos + vec3(re, 0.0, 0.0), tw, rockFine) - r0, rockH(vWPos + vec3(0.0, re, 0.0), tw, rockFine) - r0, rockH(vWPos + vec3(0.0, 0.0, re), tw, rockFine) - r0) / re;
+            float r0 = rockH(vWPos, tw, rockFine, strataK);
+            vec3 g3 = vec3(rockH(vWPos + vec3(re, 0.0, 0.0), tw, rockFine, strataK) - r0, rockH(vWPos + vec3(0.0, re, 0.0), tw, rockFine, strataK) - r0, rockH(vWPos + vec3(0.0, 0.0, re), tw, rockFine, strataK) - r0) / re;
             g3 -= dot(g3, nW) * nW;
             float rk = rockAmt * (0.55 - 0.3 * smoothstep(300.0, 1200.0, camD));
             nW = normalize(nW - g3 * rk);
@@ -305,7 +308,7 @@ export function createTerrainMaterial(world) {
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v8';
+  mat.customProgramCacheKey = () => 'terrain-v9';
   { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); }; }
   return mat;
 }

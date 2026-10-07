@@ -104,7 +104,9 @@ class Game extends Emitter {
     this.regions = REGIONS;
     this.dinoSpecies = SPECIES;
     this.state = 'loading';
-    this.settings = { quality: 'high', volume: 0.8, music: 0.5, sens: 0.0022, fov: 70, invertY: false, dayLength: 24 };
+    // phones and tablets start on medium; desktops on high (the dynamic resolution governor adapts further)
+    const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+    this.settings = { quality: coarse ? 'medium' : 'high', volume: 0.8, music: 0.5, sens: 0.0022, fov: 70, invertY: false, dayLength: 24 };
     try { Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* ignore */ }
     this.quality = { ...QUALITY[this.settings.quality] };
   }
@@ -112,7 +114,7 @@ class Game extends Emitter {
   async boot() {
     const canvas = document.getElementById('game');
     const renderer = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }));
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.pixelRatio));
+    renderer.setPixelRatio(this._targetPixelRatio());
     renderer.setSize(innerWidth, innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
@@ -307,7 +309,7 @@ class Game extends Emitter {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
     if (qualityChanged) {
       Object.assign(this.quality, QUALITY[S.quality]);
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality.pixelRatio));
+      this.resScale = 1;
       this.resize();
       // rebuild grass and vegetation density
       if (this.grass) { this.scene.remove(this.grass.mesh); this.grass.mesh.geometry.dispose(); this.grass = new Grass(this.world, this.scene, this.quality); }
@@ -327,8 +329,28 @@ class Game extends Emitter {
   resize() {
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(this._targetPixelRatio());
     this.renderer.setSize(innerWidth, innerHeight);
     if (this.composer) { this.composer.setPixelRatio(this.renderer.getPixelRatio()); this.composer.setSize(innerWidth, innerHeight); }
+  }
+
+  _targetPixelRatio() {
+    return Math.max(0.45, Math.min(window.devicePixelRatio, this.quality.pixelRatio) * (this.resScale || 1));
+  }
+
+  // Dynamic resolution: keep frame times near target by stepping the render scale with hysteresis.
+  _governResolution(rawDt) {
+    if (!this.composer || this.state !== 'playing' || document.hidden || rawDt > 0.25) return;
+    this.resScale = this.resScale || 1;
+    this._ft = this._ft === undefined ? rawDt : this._ft * 0.95 + rawDt * 0.05;
+    this._resT = (this._resT || 0) + rawDt;
+    if (this._resT < 3) return;
+    const ms = this._ft * 1000;
+    let next = this.resScale;
+    if (ms > 24) next = Math.max(0.6, this.resScale - 0.1);
+    else if (ms < 14.5) next = Math.min(1, this.resScale + 0.05);
+    if (Math.abs(next - this.resScale) > 0.001) { this.resScale = next; this._resT = 0; this.resize(); }
+    else this._resT = 2;
   }
 
   requestCapture(cb) { this._capture = cb; }
@@ -551,6 +573,9 @@ class Game extends Emitter {
   }
 
   _render(dt) {
+    const now = performance.now();
+    if (this._lastRenderT) this._governResolution((now - this._lastRenderT) / 1000);
+    this._lastRenderT = now;
     if (this.quality.bloom || true) this.composer.render(dt);
     if (this._capture) {
       const cb = this._capture;
