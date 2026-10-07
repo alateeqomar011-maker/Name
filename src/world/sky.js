@@ -293,7 +293,7 @@ export class Sky {
     this.resolveMat = new THREE.ShaderMaterial({
       uniforms: {
         tRaw: { value: null }, tHist: { value: null }, uProjInv: { value: new THREE.Matrix4() }, uViewInv: { value: new THREE.Matrix4() },
-        uPrevVP: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uBlend: { value: 0.12 },
+        uPrevVP: { value: new THREE.Matrix4() }, uTexel: { value: new THREE.Vector2() }, uBlend: { value: 0.08 },
       },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: /* glsl */ `
@@ -314,7 +314,8 @@ export class Sky {
           vec4 pc = uPrevVP * vec4(dir, 0.0);
           vec2 puv = pc.xy / pc.w * 0.5 + 0.5;
           float valid = (pc.w > 0.0 && puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0) ? 1.0 : 0.0;
-          vec3 hist = clamp(texture2D(tHist, puv).rgb, mn, mx);
+          vec3 ext = (mx - mn) * 0.35;
+          vec3 hist = clamp(texture2D(tHist, puv).rgb, mn - ext, mx + ext);
           gl_FragColor = vec4(mix(cur, hist, valid * (1.0 - uBlend)), 1.0);
         }`,
       depthTest: false, depthWrite: false,
@@ -422,7 +423,7 @@ export class Sky {
     this.sunColor.setRGB(tr[0], tr[1], tr[2]).multiplyScalar(10.0 * sunUp * overcast);
     const moonUp = THREE.MathUtils.smoothstep(this.moonDir.y, -0.02, 0.12);
     const night = 1 - THREE.MathUtils.smoothstep(el, -0.12, 0.02);
-    const moonColor = new THREE.Color(0.5, 0.62, 0.9).multiplyScalar(0.55 * moonUp * night * (1 - dark * 0.7));
+    const moonColor = new THREE.Color(0.5, 0.62, 0.9).multiplyScalar(0.35 * moonUp * night * (1 - dark * 0.7));
     this.useMoon = sunUp < 0.02 && moonUp > 0;
     this.keyDir = this.useMoon ? this.moonDir : this.sunDir;
     this.keyColor = this.useMoon ? moonColor : this.sunColor;
@@ -449,7 +450,7 @@ export class Sky {
       u.uMoonDir.value.copy(this.moonDir);
       u.uCloudDark.value = weather.dark;
       u.uStars.value = (1 - this.dayFactor) * (1 - weather.cover * 0.8);
-      u.uSunColor.value.copy(this.useMoon ? this.keyColor : this.sunColor).multiplyScalar(this.useMoon ? 2.0 : 0.42);
+      u.uSunColor.value.copy(this.useMoon ? this.keyColor : this.sunColor).multiplyScalar(this.useMoon ? 0.6 : 0.42);
       u.uAmbientTop.value.copy(this.ambientTop);
       u.uTurbidity.value = 1.8 + weather.dark * 4 + weather.haze * 5;
       u.uSkyScale.value = 1.0;
@@ -495,6 +496,10 @@ export class Sky {
     ru.uProjInv.value.copy(camera.projectionMatrixInverse);
     ru.uViewInv.value.copy(camera.matrixWorld);
     ru.uPrevVP.value.copy(this.prevVP);
+    // drop history after a sudden change (time skip, teleport, weather snap)
+    const jump = !this._lastSun || this._lastSun.distanceTo(this.sunDir) > 0.03;
+    ru.uBlend.value = jump ? 1 : 0.08;
+    (this._lastSun || (this._lastSun = new THREE.Vector3())).copy(this.sunDir);
     r.setRenderTarget(dst);
     r.render(this.resolveScene, this.fsCam);
     this.histIdx = 1 - this.histIdx;

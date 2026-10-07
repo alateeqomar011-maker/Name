@@ -152,6 +152,7 @@ export class AudioEngine {
     const cam = game.camera;
     const L = ctx.listener;
     const p = cam.position;
+    this.lp = { x: p.x, y: p.y, z: p.z };
     const fwd = cam.getWorldDirection(this._f || (this._f = new cam.position.constructor()));
     if (L.positionX) {
       L.positionX.setTargetAtTime(p.x, t, 0.05); L.positionY.setTargetAtTime(p.y, t, 0.05); L.positionZ.setTargetAtTime(p.z, t, 0.05);
@@ -427,10 +428,9 @@ export class AudioEngine {
   }
 
   _bird(jungle) {
-    const ctx = this.ctx;
     const ang = Math.random() * Math.PI * 2;
-    const pos = { x: Math.cos(ang) * 40, y: 10 + Math.random() * 10, z: Math.sin(ang) * 40 };
-    const p = this._f ? { x: this.ctx.listener.positionX ? this.ctx.listener.positionX.value + pos.x : pos.x, y: pos.y + (this.ctx.listener.positionY ? this.ctx.listener.positionY.value : 0), z: (this.ctx.listener.positionZ ? this.ctx.listener.positionZ.value : 0) + pos.z } : pos;
+    const lp = this.lp || { x: 0, y: 0, z: 0 };
+    const p = { x: lp.x + Math.cos(ang) * 40, y: lp.y + 10 + Math.random() * 10, z: lp.z + Math.sin(ang) * 40 };
     const pn = this._panner(p);
     const base = jungle ? 1400 + Math.random() * 2000 : 2400 + Math.random() * 1800;
     const n = 2 + Math.floor(Math.random() * 5);
@@ -440,7 +440,6 @@ export class AudioEngine {
       if (style < 0.5) this._tone(pn, { type: 'sine', f0: base * (1 + Math.random() * 0.3), f1: base * (0.7 + Math.random() * 0.6), dur: 0.08 + Math.random() * 0.06, gain: 0.05, delay: d });
       else this._tone(pn, { type: 'triangle', f0: base * 0.6, f1: base * 1.3, dur: 0.12, gain: 0.04, delay: d * 1.6 });
     }
-    void ctx;
   }
 
   _cricket() {

@@ -286,7 +286,7 @@ SPECIES.triceratops = {
 SPECIES.brachio = {
   id: 'brachio', name: 'Brachiosaurus', icon: '🦕', diet: 'herbivore', length: 22,
   tile: 1.4, texture: 'scales', scaleRange: [0.8, 1.05],
-  palette: { back: [0.33, 0.35, 0.3], belly: [0.55, 0.55, 0.47], stripe: [0.25, 0.25, 0.2], spots: 0.7, claw: [0.25, 0.23, 0.2] },
+  palette: { gain: 0.55, back: [0.27, 0.26, 0.21], belly: [0.46, 0.43, 0.35], stripe: [0.16, 0.15, 0.12], spots: 0.7, claw: [0.25, 0.23, 0.2] },
   spine: [
     { name: 'tail6', z: -11, y: 3.4, w: 0.06, h: 0.07 },
     { name: 'tail5', z: -8.6, y: 4.2, w: 0.25, h: 0.3 },

@@ -114,8 +114,13 @@ function openSub(name) {
 }
 
 function bindMenus() {
+  let confirmNew = false;
   $('btn-new').onclick = () => {
-    if (game.hasSave() && !confirm('Start a new expedition? Your saved progress will be overwritten.')) return;
+    if (game.hasSave() && !confirmNew) {
+      confirmNew = true;
+      $('btn-new').textContent = 'Overwrite saved game?';
+      return;
+    }
     try { localStorage.removeItem('primordia-save-v1'); } catch (e) { /* ignore */ }
     begin(false);
   };

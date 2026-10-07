@@ -349,7 +349,7 @@ export class Game {
 
     const day = this.sky.dayFactor;
     this.scene.environmentIntensity = (0.06 + day * 0.94) * (1 - this.weather.dark * 0.35) * (this.player.inCave ? 0.1 : 1);
-    const exposure = THREE.MathUtils.lerp(2.4, 0.52, Math.pow(day, 0.6)) * (1 + this.weather.dark * 0.35) * this.exposureAdapt;
+    const exposure = THREE.MathUtils.lerp(1.45, 0.52, Math.pow(day, 0.6)) * (1 + this.weather.dark * 0.35) * this.exposureAdapt;
 
     this.sky.renderSky(cam);
     const P = this.player;
@@ -370,6 +370,7 @@ export class Game {
       saturation: 1.18 - this.weather.dark * 0.3,
       contrast: 1.07,
       bloomStrength: 0.22 + (this.features.eruptGlow || 0) * 0.2,
+      tint: _tint.setRGB(1, 1, 1).lerp(_nightTint, 1 - day),
     });
   }
 
@@ -773,6 +774,8 @@ export class Game {
 
 const NO_INPUT = { locked: false, mouse: { dx: 0, dy: 0 }, down: () => false, hit: () => false };
 const _tmp = new THREE.Vector3();
+const _tint = new THREE.Color();
+const _nightTint = new THREE.Color(0.62, 0.78, 1.25);
 void CAVES;
 
 function tick() {
