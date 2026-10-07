@@ -1,7 +1,7 @@
 // GPU-placed grass field that wraps around the camera. Heights and density come from world textures.
 import * as THREE from 'three';
 import { atmospherePatch, TRANSLUCENCY } from './atmosphere.js';
-import { U, GLSL_HEIGHT, GLSL_NOISE } from './shaderlib.js';
+import { U, GLSL_HEIGHT, GLSL_NOISE, GLSL_MEADOW } from './shaderlib.js';
 
 export class Grass {
   constructor(world, scene, quality) {
@@ -68,7 +68,8 @@ export class Grass {
           uniform float uTime; uniform float uWind; uniform vec2 uWindDir; uniform float uSnow;
           varying vec3 vGrassCol; varying float vTip;
           ${GLSL_HEIGHT}
-          ${GLSL_NOISE}`)
+          ${GLSL_NOISE}
+          ${GLSL_MEADOW}`)
         .replace('#include <beginnormal_vertex>', `vec3 objectNormal = vec3(0.0, 1.0, 0.0);`)
         .replace('#include <begin_vertex>', `
           vec2 baseC = uCam - uTileSize * 0.5;
@@ -94,8 +95,10 @@ export class Grass {
           vec3 transformed = vec3(wp.x, h - 0.04, wp.y) + p;
           vec3 base = pow(g.rgb, vec3(2.2));
           // lush green patches mixed into dry grassland, per-clump hue variation
-          float lushN = vnoise(wp * 0.018) * 0.7 + vnoise(wp * 0.07) * 0.3;
-          base = mix(base, vec3(0.075, 0.13, 0.03), smoothstep(0.35, 0.75, lushN) * 0.55 * step(base.g, base.r * 1.6 + 0.2));
+          vec2 mv = meadowVar(wp);
+          float grassy = smoothstep(0.0, 0.02, base.g - max(base.r * 0.9, base.b));
+          base = mix(base, vec3(0.075, 0.13, 0.03), mv.x * 0.55 * step(base.g, base.r * 1.6 + 0.2));
+          base = mix(base, base * vec3(1.45, 1.12, 0.5) + vec3(0.03, 0.018, 0.0), mv.y * 0.55 * grassy);
           base *= vec3(0.9 + 0.2 * aOffset.z, 0.92 + 0.16 * fract(aOffset.z * 7.3), 0.9);
           vec3 tipC = base * vec3(1.08, 1.22, 0.9) + vec3(0.02, 0.026, 0.004);
           vGrassCol = mix(base * 0.5, tipC, t) * (0.85 + 0.3 * vnoise(wp * 0.08));
@@ -107,7 +110,7 @@ export class Grass {
           varying vec3 vGrassCol; varying float vTip;`)
         .replace('#include <color_fragment>', `diffuseColor.rgb = vGrassCol;`);
     };
-    mat.customProgramCacheKey = () => 'grass-v1';
+    mat.customProgramCacheKey = () => 'grass-v2';
     { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.6, 0.35)); }; }
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;

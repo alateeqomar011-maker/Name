@@ -27,6 +27,16 @@ float vnoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.
 float fbm3(vec2 p){ float s = 0.0; float a = 0.5; for(int i=0;i<3;i++){ s += a*vnoise(p); p = p*2.03 + 17.1; a *= 0.5; } return s/0.875; }
 `;
 
+// Macro meadow variation shared by terrain and grass so blades always match the ground beneath:
+// x = lush green hollows, y = sun-dried golden drifts
+export const GLSL_MEADOW = /* glsl */ `
+vec2 meadowVar(vec2 wp){
+  float lushN = vnoise(wp * 0.018) * 0.7 + vnoise(wp * 0.07) * 0.3;
+  float dryN = vnoise(wp * 0.0105 + 17.0) * 0.6 + vnoise(wp * 0.043 + 3.0) * 0.4;
+  return vec2(smoothstep(0.35, 0.75, lushN), smoothstep(0.52, 0.78, dryN) * (1.0 - smoothstep(0.35, 0.75, lushN) * 0.7));
+}
+`;
+
 // Manual bilinear sampling of the world height grid (texture of size N x N covering the world)
 export const GLSL_HEIGHT = /* glsl */ `
 uniform sampler2D uHeightTex;

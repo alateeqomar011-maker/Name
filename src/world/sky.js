@@ -52,8 +52,14 @@ void main(){
   // high cirrus streaks
   if (y > 0.0) {
     vec2 ci = dir.xz / (y + 0.2) * 1.1 + uCloudOffset * 0.6;
-    float cir = fbm3(vec2(ci.x * 0.6 + ci.y * 0.3, ci.y * 4.0) * 1.7);
-    float cirA = smoothstep(0.58, 0.85, cir) * smoothstep(0.1, 0.4, y) * (0.35 + 0.3 * (1.0 - uCloudCover)) * (1.0 - uCloudDark);
+    // curl the fibres with a domain warp and break the sheet into drifting patches (mares' tails)
+    vec2 wq = vec2(fbm3(ci * 0.8 + 3.0), fbm3(ci * 0.8 + 11.0)) - 0.5;
+    vec2 cw = ci + wq * 1.6;
+    float patchM = smoothstep(0.4, 0.72, fbm3(ci * 0.42 + 7.0));
+    float fib = fbm3(vec2(cw.x * 0.9 + cw.y * 0.35, cw.y * 6.0 - cw.x * 1.4) * 1.6);
+    float fine = vnoise(vec2(cw.x * 2.5 + cw.y, cw.y * 24.0 - cw.x * 4.0));
+    float cir = fib * 0.78 + fine * 0.22;
+    float cirA = smoothstep(0.5, 0.82, cir) * patchM * smoothstep(0.08, 0.4, y) * (0.4 + 0.3 * (1.0 - uCloudCover)) * (1.0 - uCloudDark);
     vec3 cirC = mix(uHorizon * 1.15 + uSunColor * 0.25, uGlow * 1.2 + uHorizon, pow(sd, 3.0) * 0.6) * mix(1.0, 0.1, uNight);
     col = mix(col, cirC, cirA * 0.6);
   }

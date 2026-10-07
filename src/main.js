@@ -293,7 +293,7 @@ class Game extends Emitter {
     this.composer.addPass(this.renderPass);
     this.godRays = new GodRaysPass();
     this.composer.addPass(this.godRays);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.9);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.24, 0.4, 0.92);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);

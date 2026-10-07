@@ -35,10 +35,10 @@ export const SPECIES = {
     length: 9, mass: '9,000 kg', period: 'Late Cretaceous', rarity: 1, xp: 100,
     body: {
       biped: false, hip: 2.25, shoulder: 1.9, tailLen: 3.0, tailBase: 0.55, tailRaise: -0.15, bodyLen: 3.3, hipR: 0.95, bellyR: 1.25, chestR: 1.05,
-      shoulderDY: -0.25, neckLen: 0.7, neckAngle: 5, neckR0: 0.8, neckR1: 0.66, headLen: 2.0, headR: 0.74, headH: 1.0, snoutR: 0.32,
-      headAngle: -22, width: 1.05, legThick: 0.42, armThick: 0.32, frill: { r: 1.35, angle: 10 }, horns: [[0.75, 0.55, 0.32, 1.0, 0.13], [-0.75, 0.55, 0.32, 1.0, 0.13]], noseHorn: 0.35, beak: true,
+      shoulderDY: -0.25, neckLen: 0.7, neckAngle: 5, neckR0: 0.8, neckR1: 0.66, headLen: 1.55, headR: 0.72, headH: 1.2, snoutR: 0.42,
+      headAngle: -22, width: 1.05, legThick: 0.42, armThick: 0.32, frill: { r: 1.5, angle: 48 }, horns: [[0.75, 0.55, 0.32, 1.0, 0.13], [-0.75, 0.55, 0.32, 1.0, 0.13]], noseHorn: 0.35, beak: true,
     },
-    colors: { base: [0.42, 0.36, 0.26], belly: [0.7, 0.64, 0.5], pattern: [0.28, 0.22, 0.15], display: [0.62, 0.3, 0.12], type: 'blotch', scale: 0.9 },
+    colors: { base: [0.42, 0.36, 0.26], belly: [0.68, 0.62, 0.48], pattern: [0.26, 0.2, 0.14], display: [0.5, 0.36, 0.22], type: 'blotch', scale: 0.9 },
     speed: { walk: 1.8, run: 7.5 }, turn: 0.9, herd: [3, 6], health: 700, damage: 45, detect: 30,
     biomes: [B.GRASSLAND, B.FOREST], sound: { kind: 'bellow', pitch: 0.75, len: 1.6 },
     fact: 'Three horns and a bony frill up to two metres wide. Herds circle their young when threatened — never provoke a Triceratops calf.',
@@ -61,7 +61,7 @@ export const SPECIES = {
     length: 22, mass: '40,000 kg', period: 'Late Jurassic', rarity: 2, xp: 200,
     body: {
       biped: false, hip: 4.5, shoulder: 5.8, tailLen: 7.5, tailBase: 1.05, tailRaise: -0.4, bodyLen: 5.0, hipR: 1.5, bellyR: 1.85, chestR: 1.7,
-      shoulderDY: 1.4, neckLen: 9.0, neckAngle: 66, neckR0: 1.3, neckR1: 0.44, headLen: 1.05, headR: 0.36, headH: 0.95, snoutR: 0.22,
+      shoulderDY: 1.4, neckLen: 9.0, neckAngle: 66, neckR0: 1.3, neckR1: 0.3, headLen: 1.05, headR: 0.37, headH: 1.2, snoutR: 0.24,
       headAngle: -22, width: 0.95, legThick: 1.02, armThick: 0.92, neckSegs: 4, nasalCrest: true,
     },
     colors: { base: [0.46, 0.42, 0.33], belly: [0.6, 0.56, 0.46], pattern: [0.34, 0.31, 0.24], display: [0.4, 0.36, 0.28], type: 'blotch', scale: 0.7 },
@@ -74,7 +74,7 @@ export const SPECIES = {
     length: 8, mass: '5,000 kg', period: 'Late Jurassic', rarity: 1, xp: 100,
     body: {
       biped: false, hip: 2.4, shoulder: 1.45, tailLen: 3.6, tailBase: 0.5, tailRaise: 0.35, bodyLen: 2.9, hipR: 0.85, bellyR: 1.0, chestR: 0.75,
-      shoulderDY: -0.6, neckLen: 0.95, neckAngle: -20, neckR0: 0.4, neckR1: 0.25, headLen: 0.65, headR: 0.2, headH: 0.9, snoutR: 0.1,
+      shoulderDY: -0.6, neckLen: 0.95, neckAngle: -20, neckR0: 0.4, neckR1: 0.25, headLen: 0.55, headR: 0.21, headH: 0.95, snoutR: 0.12,
       headAngle: -20, width: 0.8, legThick: 0.4, armThick: 0.26, plates: { from: -2.6, to: 2.6, count: 17, size: 0.95 }, thagomizer: true,
     },
     colors: { base: [0.4, 0.42, 0.3], belly: [0.72, 0.7, 0.55], pattern: [0.25, 0.28, 0.18], display: [0.7, 0.35, 0.18], type: 'spots', scale: 1.4 },
@@ -100,7 +100,7 @@ export const SPECIES = {
     length: 9.5, mass: '2,500 kg', period: 'Late Cretaceous', rarity: 1, xp: 80,
     body: {
       biped: false, hip: 2.5, shoulder: 1.75, tailLen: 4.2, tailBase: 0.45, tailRaise: 0.2, bodyLen: 2.7, hipR: 0.68, bellyR: 0.82, chestR: 0.6,
-      shoulderDY: -0.15, neckLen: 1.5, neckAngle: 40, neckR0: 0.38, neckR1: 0.26, headLen: 1.0, headR: 0.25, headH: 1.05, snoutR: 0.16,
+      shoulderDY: -0.15, neckLen: 1.5, neckAngle: 40, neckR0: 0.38, neckR1: 0.2, headLen: 1.0, headR: 0.27, headH: 1.4, snoutR: 0.17,
       headAngle: -18, width: 0.8, legThick: 0.36, armThick: 0.15, crest: { len: 1.65, r: 0.1 }, duckbill: true,
     },
     colors: { base: [0.5, 0.42, 0.28], belly: [0.82, 0.76, 0.6], pattern: [0.36, 0.22, 0.14], display: [0.72, 0.3, 0.16], type: 'stripes', scale: 1.6 },
@@ -113,7 +113,7 @@ export const SPECIES = {
     length: 5.5, mass: '440 kg', period: 'Late Cretaceous', rarity: 1, xp: 70,
     body: {
       biped: true, hip: 1.75, tailLen: 2.6, tailBase: 0.24, tailRaise: 0.1, bodyLen: 1.05, hipR: 0.3, bellyR: 0.38, chestR: 0.3,
-      shoulderDY: 0.1, neckLen: 1.25, neckAngle: 58, neckR0: 0.15, neckR1: 0.08, headLen: 0.4, headR: 0.09, headH: 1.0, snoutR: 0.04,
+      shoulderDY: 0.1, neckLen: 1.25, neckAngle: 58, neckR0: 0.15, neckR1: 0.065, headLen: 0.4, headR: 0.095, headH: 1.2, snoutR: 0.045,
       headAngle: -10, width: 0.85, legThick: 0.2, armLen: 0.65, armThick: 0.045, beak: true, feathers: true,
     },
     colors: { base: [0.6, 0.5, 0.35], belly: [0.9, 0.86, 0.76], pattern: [0.45, 0.3, 0.2], display: [0.45, 0.25, 0.15], type: 'spots', scale: 3.0 },
@@ -139,7 +139,7 @@ export const SPECIES = {
     length: 6.5, mass: '400 kg', period: 'Early Jurassic', rarity: 2, xp: 160,
     body: {
       biped: true, hip: 1.7, tailLen: 3.1, tailBase: 0.27, tailRaise: 0.15, bodyLen: 1.25, hipR: 0.33, bellyR: 0.42, chestR: 0.32,
-      shoulderDY: 0.08, neckLen: 0.85, neckAngle: 42, neckR0: 0.2, neckR1: 0.15, headLen: 0.62, headR: 0.15, headH: 1.1, snoutR: 0.07,
+      shoulderDY: 0.08, neckLen: 0.85, neckAngle: 42, neckR0: 0.2, neckR1: 0.12, headLen: 0.62, headR: 0.16, headH: 1.3, snoutR: 0.08,
       headAngle: -10, width: 0.85, legThick: 0.2, armLen: 0.7, armThick: 0.06, teeth: true, twinCrest: true,
     },
     colors: { base: [0.38, 0.4, 0.22], belly: [0.76, 0.72, 0.52], pattern: [0.18, 0.2, 0.08], display: [0.85, 0.35, 0.1], type: 'spots', scale: 2.5 },
@@ -177,11 +177,11 @@ export const SPECIES = {
     id: 'iguanodon', name: 'Iguanodon bernissartensis', short: 'Iguanodon', diet: 'herbivore', temperament: 'docile',
     length: 10, mass: '3,500 kg', period: 'Early Cretaceous', rarity: 1, xp: 90,
     body: {
-      biped: false, hip: 2.6, shoulder: 1.9, tailLen: 4.4, tailBase: 0.52, tailRaise: 0.15, bodyLen: 3.0, hipR: 0.75, bellyR: 0.95, chestR: 0.72,
-      shoulderDY: -0.15, neckLen: 1.2, neckAngle: 30, neckR0: 0.45, neckR1: 0.3, headLen: 1.0, headR: 0.27, headH: 1.15, snoutR: 0.15,
-      headAngle: -22, width: 0.85, legThick: 0.4, armThick: 0.2, thumbSpikes: true, beak: true,
+      biped: false, hip: 2.6, shoulder: 1.9, tailLen: 4.4, tailBase: 0.56, tailRaise: 0.15, bodyLen: 3.0, hipR: 0.8, bellyR: 0.98, chestR: 0.78,
+      shoulderDY: -0.15, neckLen: 1.2, neckAngle: 30, neckR0: 0.5, neckR1: 0.26, headLen: 1.0, headR: 0.32, headH: 1.6, snoutR: 0.21,
+      headAngle: -22, width: 0.88, legThick: 0.55, armThick: 0.28, thumbSpikes: true, beak: true,
     },
-    colors: { base: [0.36, 0.4, 0.3], belly: [0.72, 0.72, 0.58], pattern: [0.22, 0.26, 0.18], display: [0.4, 0.45, 0.3], type: 'bands', scale: 1.2 },
+    colors: { base: [0.36, 0.37, 0.25], belly: [0.62, 0.58, 0.45], pattern: [0.17, 0.19, 0.12], display: [0.42, 0.44, 0.28], type: 'bands', scale: 1.2 },
     speed: { walk: 1.8, run: 7 }, turn: 1.0, herd: [3, 6], health: 450, damage: 20, detect: 35,
     biomes: [B.FOREST, B.SWAMP, B.GRASSLAND], sound: { kind: 'bellow', pitch: 1.0, len: 1.3 },
     fact: 'One of the first dinosaurs ever discovered. Its conical thumb spike was once mistaken for a nose horn.',
@@ -191,7 +191,7 @@ export const SPECIES = {
     length: 9.5, mass: '5,000 kg', period: 'Late Cretaceous', rarity: 5, xp: 900,
     body: {
       biped: true, hip: 2.9, tailLen: 2.6, tailBase: 0.6, tailRaise: 0.1, bodyLen: 2.2, hipR: 0.85, bellyR: 1.1, chestR: 0.75,
-      shoulderDY: 0.6, neckLen: 2.2, neckAngle: 55, neckR0: 0.4, neckR1: 0.22, headLen: 0.55, headR: 0.17, headH: 0.95, snoutR: 0.06,
+      shoulderDY: 0.6, neckLen: 2.2, neckAngle: 55, neckR0: 0.4, neckR1: 0.16, headLen: 0.55, headR: 0.18, headH: 1.2, snoutR: 0.07,
       headAngle: -20, width: 0.9, legThick: 0.42, armLen: 2.3, armThick: 0.13, feathers: true, scythe: true, beak: true,
     },
     colors: { base: [0.32, 0.28, 0.24], belly: [0.62, 0.56, 0.48], pattern: [0.48, 0.42, 0.36], display: [0.78, 0.72, 0.62], type: 'bands', scale: 1.8 },

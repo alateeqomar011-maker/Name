@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { atmospherePatch, TRANSLUCENCY } from './atmosphere.js';
 import { GRID, CELL, HALF } from './worldgen.js';
-import { U, GLSL_NOISE } from './shaderlib.js';
+import { U, GLSL_NOISE, GLSL_MEADOW } from './shaderlib.js';
 
 const CHUNK_CELLS = 64; // 256m
 const CHUNKS = GRID / CHUNK_CELLS; // 16
@@ -29,6 +29,7 @@ export function createTerrainMaterial(world) {
         uniform float uWet; uniform float uSnow; uniform float uTime; uniform float uSnowLine;
         uniform sampler2D uSurfTex; uniform vec2 uWindDir;
         ${GLSL_NOISE}
+        ${GLSL_MEADOW}
         vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
         // Voronoi: x = F1, y = F2 - F1 (edge distance), z = cell hash
         vec3 voro(vec2 p){
@@ -113,6 +114,14 @@ export function createTerrainMaterial(world) {
         float dnL = vnoise(vWPos.xz * 0.045);
         diffuseColor.rgb *= 0.78 + 0.34 * dnL;
         diffuseColor.rgb *= mix(1.0, 0.8 + 0.3 * dn + 0.12 * dn2, detailFade);
+        // ---- meadow patchwork: lush hollows and sun-dried drifts (matches the grass blades) ----
+        {
+          vec3 b0 = diffuseColor.rgb;
+          float grassyT = smoothstep(0.0, 0.02, b0.g - max(b0.r * 0.9, b0.b)) * smoothstep(0.75, 0.9, vWNormal.y);
+          vec2 mv = meadowVar(vWPos.xz);
+          diffuseColor.rgb = mix(b0, vec3(0.06, 0.105, 0.025), mv.x * 0.45 * grassyT);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.45, 1.12, 0.5) + vec3(0.03, 0.018, 0.0), mv.y * 0.5 * grassyT);
+        }
         // ---- close-up ground detail: leaf litter, twigs, pebbles, sand ripples, cracked earth ----
         vec4 surf = texture2D(uSurfTex, ((vWPos.xz + 2048.0) / 4.0 + 0.5) / 1025.0);
         float gH = 0.0;
@@ -265,13 +274,13 @@ export function createTerrainMaterial(world) {
             vec2 dh = vec2(dFdx(gh), dFdy(gh)) * 0.045;
             vec3 grad = sign(det) * (dh.x * r1 + dh.y * r2);
             vec3 nB = normalize(abs(det) * nW - grad);
-            if (abs(det) > 1e-9) nW = nB;
+            if (abs(det) > 1e-12 && dot(nB, nB) > 0.5) nW = nB;
           }
           nW = normalize(mix(nW, vec3(0.0, 1.0, 0.0), puddle * 0.9));
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v4';
+  mat.customProgramCacheKey = () => 'terrain-v5';
   { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); }; }
   return mat;
 }

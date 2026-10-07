@@ -35,12 +35,12 @@ const shader = {
         for (int i = 0; i < N; i++) {
           p -= delta;
           vec2 d = (p - uSun) * vec2(uAspect, 1.0);
-          float glow = exp(-dot(d, d) * 9.0);
+          float glow = exp(-dot(d, d) * 16.0);
           illum += skyMask(p) * glow * decay;
           decay *= 0.965;
         }
         illum /= float(N);
-        col += uSunColor * illum * uIntensity * 3.2;
+        col += uSunColor * illum * uIntensity * 1.5;
       }
       if (uFlare > 0.001) {
         // lens ghosts along the axis from the sun through the screen centre
