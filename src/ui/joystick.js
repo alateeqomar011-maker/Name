@@ -40,6 +40,18 @@ export class Joystick {
     el.addEventListener('pointerup', (e) => { if (e.pointerId === this.pid) end(); });
     el.addEventListener('pointercancel', end);
     el.addEventListener('click', (e) => e.stopPropagation());
+    // Sprint button: tap to toggle sprinting on/off (Shift still works on keyboards)
+    const sb = (this.sprintBtn = document.createElement('div'));
+    sb.id = 'sprintBtn';
+    sb.innerHTML = '<span class="i">🏃</span><span class="t">SPRINT</span>';
+    document.body.appendChild(sb);
+    sb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      input.sprintToggle = !input.sprintToggle;
+      sb.classList.toggle('on', input.sprintToggle);
+    });
+    sb.addEventListener('click', (e) => e.stopPropagation());
     // Touch look: drag anywhere else on the game canvas to turn the camera
     const canvas = input.canvas;
     let look = null;
@@ -55,5 +67,9 @@ export class Joystick {
     canvas.addEventListener('pointerup', stopLook);
     canvas.addEventListener('pointercancel', stopLook);
   }
-  setVisible(v) { this.el.style.display = v ? '' : 'none'; }
+  setVisible(v) {
+    this.el.style.display = v ? '' : 'none';
+    this.sprintBtn.style.display = v ? '' : 'none';
+    this.sprintBtn.classList.toggle('on', !!this.input.sprintToggle);
+  }
 }

@@ -8,6 +8,7 @@ export class Input {
     this.locked = false;
     this.joy = { x: 0, y: 0, active: false };
     this.touchLook = false;
+    this.sprintToggle = false;
     this.enabled = true;
     this.sensitivity = 0.0022;
     this.invertY = false;
@@ -50,6 +51,7 @@ export class Input {
   down(code) {
     if (!this.enabled) return false;
     if (this.keys.has(code)) return true;
+    if (code === 'ShiftLeft' && this.sprintToggle) return true;
     const j = this.joy;
     if (!j.active) return false;
     const t = 0.3;
