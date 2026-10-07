@@ -17,6 +17,7 @@ export function createTerrainMaterial(world) {
     shader.uniforms.uTime = U.uTime;
     shader.uniforms.uSnowLine = { get value() { return 200 - U.uSnow.value * 160; } };
     shader.uniforms.uSurfTex = { value: world ? world.surfTex : null };
+    shader.uniforms.uSurfTex2 = { value: world ? world.surfTex2 : null };
     shader.uniforms.uWindDir = U.uWindDir;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; varying vec3 vWNormal;')
@@ -27,7 +28,7 @@ export function createTerrainMaterial(world) {
       .replace('#include <common>', `#include <common>
         varying vec3 vWPos; varying vec3 vWNormal;
         uniform float uWet; uniform float uSnow; uniform float uTime; uniform float uSnowLine;
-        uniform sampler2D uSurfTex; uniform vec2 uWindDir;
+        uniform sampler2D uSurfTex; uniform sampler2D uSurfTex2; uniform vec2 uWindDir;
         ${GLSL_NOISE}
         ${GLSL_MEADOW}
         vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
@@ -102,7 +103,7 @@ export function createTerrainMaterial(world) {
           float plate = floor(triN(p * 0.22, w) * 5.0) / 5.0;
           float big = triN(p * 0.05, w);
           float crack = 1.0 - abs(triN(p * 0.33, w) * 2.0 - 1.0);
-          crack = smoothstep(0.94, 0.995, crack) * 0.35;
+          crack = smoothstep(0.94, 0.995, crack) * 0.3 * smoothstep(0.42, 0.7, triN(p * 0.06 + 3.0, w));
           float grain = (triN(p * 3.1, w) - 0.5) * 0.18 * fine;
           return ledge + thin + plate * 0.35 + big * 0.45 - crack + grain;
         }`)
@@ -114,20 +115,36 @@ export function createTerrainMaterial(world) {
         float dnL = vnoise(vWPos.xz * 0.045);
         diffuseColor.rgb *= 0.78 + 0.34 * dnL;
         diffuseColor.rgb *= mix(1.0, 0.8 + 0.3 * dn + 0.12 * dn2, detailFade);
+        vec2 sUV = ((vWPos.xz + 2048.0) / 4.0 + 0.5) / 1025.0;
+        vec4 surf = texture2D(uSurfTex, sUV);
+        vec4 surf2 = texture2D(uSurfTex2, sUV);
         // ---- meadow patchwork: lush hollows and sun-dried drifts (matches the grass blades) ----
         {
           vec3 b0 = diffuseColor.rgb;
-          float grassyT = smoothstep(0.0, 0.02, b0.g - max(b0.r * 0.9, b0.b)) * smoothstep(0.75, 0.9, vWNormal.y);
+          float grassyT = smoothstep(0.005, 0.03, b0.g - b0.r) * smoothstep(0.005, 0.03, b0.g - b0.b) * smoothstep(0.75, 0.9, vWNormal.y) * (1.0 - surf.g);
           vec2 mv = meadowVar(vWPos.xz);
           diffuseColor.rgb = mix(b0, vec3(0.06, 0.105, 0.025), mv.x * 0.45 * grassyT);
           diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.45, 1.12, 0.5) + vec3(0.03, 0.018, 0.0), mv.y * 0.5 * grassyT);
         }
+        // coastal sand reads as sand, not as the grassy island colour beneath it
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.43, 0.3) * (0.9 + 0.2 * dn), surf.g * smoothstep(5.0, 2.0, vWPos.y) * smoothstep(0.7, 0.9, vWNormal.y) * 0.75);
         // ---- close-up ground detail: leaf litter, twigs, pebbles, sand ripples, cracked earth ----
-        vec4 surf = texture2D(uSurfTex, ((vWPos.xz + 2048.0) / 4.0 + 0.5) / 1025.0);
         float gH = 0.0;
         float gRough = -1.0;
         float closeFade = 1.0 - smoothstep(28.0, 75.0, camD);
-        float fineFade = 1.0 - smoothstep(12.0, 34.0, camD);
+        float fineFade = 1.0 - smoothstep(9.0, 26.0, camD);
+        // planar (xz) detail stretches on slopes: keep it to walkable ground
+        float slopeK = smoothstep(0.72, 0.9, vWNormal.y);
+        surf *= slopeK;
+        // swamp mud & moss: dark, wet, algae-streaked ground with standing water
+        float swampMud = surf2.r * smoothstep(0.8, 0.95, vWNormal.y) * step(0.2, vWPos.y);
+        {
+          float mn = fbm3(vWPos.xz * 0.18);
+          vec3 mudC = mix(vec3(0.05, 0.042, 0.028), vec3(0.075, 0.07, 0.035), mn);
+          diffuseColor.rgb = mix(diffuseColor.rgb, mudC, swampMud * 0.85);
+          float algae = surf2.g * smoothstep(0.55, 0.75, fbm3(vWPos.xz * 0.35 + 4.0)) * smoothstep(0.8, 0.95, vWNormal.y);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.06, 0.09, 0.025), algae * 0.6);
+        }
         if (closeFade > 0.0) {
           vec2 gp = vWPos.xz;
           float flatK = smoothstep(0.7, 0.9, vWNormal.y);
@@ -152,7 +169,7 @@ export function createTerrainMaterial(world) {
             diffuseColor.rgb *= mix(1.0, (0.9 + 0.2 * cv.z) * (1.0 - crack * 0.6), dk);
           }
           // pebbles, gravel and loose stones with contact shadows
-          float gk = max(surf.b, surf.r * 0.22) * closeFade;
+          float gk = max(surf.b, surf.r * 0.22) * closeFade * (1.0 - swampMud);
           if (gk > 0.02) {
             vec2 sw = vec2(vnoise(gp * 9.0), vnoise(gp * 9.0 + 4.1)) - 0.5;
             vec3 pv = voro(gp * 5.0 + sw * 0.35);
@@ -184,7 +201,7 @@ export function createTerrainMaterial(world) {
           }
           // forest floor: layered fallen leaves, twigs and dark humus
           if (surf.r > 0.04) {
-            float lk = surf.r * smoothstep(0.55, 0.8, vWNormal.y) * step(0.5, vWPos.y);
+            float lk = surf.r * smoothstep(0.55, 0.8, vWNormal.y) * step(0.5, vWPos.y) * (1.0 - swampMud * 0.7);
             vec4 L1 = leafLayer(gp * 5.5, 0.55 + 0.35 * vnoise(gp * 0.5));
             vec4 L2 = leafLayer(gp * 3.2 + 17.0, 0.6);
             vec4 L = L1.x > 0.0 ? L1 : L2;
@@ -223,7 +240,8 @@ export function createTerrainMaterial(world) {
         float layerTone = hash12(vec2(layerId, 7.0));
         vec3 rockC = vc * (0.7 + 0.5 * clamp(rh, 0.0, 1.3)) * (0.88 + 0.24 * layerTone);
         rockC = mix(rockC, rockC * vec3(1.08, 0.98, 0.86), smoothstep(0.4, 0.8, triN(vWPos * 0.02, tw)) * 0.6);
-        rockC *= 1.0 - crackR * 0.35;
+        crackR *= smoothstep(0.42, 0.7, triN(vWPos * 0.06 + 3.0, tw));
+        rockC *= 1.0 - crackR * 0.22;
         // lichen & moss in sheltered ledges
         float lichen = smoothstep(0.6, 0.72, triN(vWPos * 0.55, tw)) * smoothstep(0.35, 0.75, ny) * (1.0 - smoothstep(240.0, 300.0, vWPos.y));
         rockC = mix(rockC, vec3(0.16, 0.19, 0.1), lichen * 0.45);
@@ -238,8 +256,8 @@ export function createTerrainMaterial(world) {
         snowAmt = max(snowAmt, uSnow * 0.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.96), snowAmt);
         float flatG = smoothstep(0.86, 0.975, ny);
-        float puddle = uWet * flatG * smoothstep(0.56, 0.7, fbm3(vWPos.xz * 0.085)) * step(0.6, vWPos.y) * (1.0 - snowAmt);
-        float wet = uWet * (0.55 + 0.45 * flatG) * (1.0 - snowAmt);
+        float puddle = max(uWet, swampMud * 0.85) * flatG * smoothstep(0.56 - swampMud * 0.1, 0.7 - swampMud * 0.1, fbm3(vWPos.xz * 0.085)) * step(0.6, vWPos.y) * (1.0 - snowAmt);
+        float wet = max(uWet * (0.55 + 0.45 * flatG), swampMud * 0.8) * (1.0 - snowAmt);
         diffuseColor.rgb *= mix(1.0, 0.55, wet);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + vec3(0.01, 0.012, 0.015), puddle);
       `)
@@ -267,7 +285,7 @@ export function createTerrainMaterial(world) {
           }
           // micro-relief from ground detail (pebbles, leaves, ripples) via screen-space derivatives
           {
-            float gh = gH * (1.0 - rockAmt) * (1.0 - snowAmt) * (1.0 - puddle);
+            float gh = gH * (1.0 - rockAmt) * (1.0 - snowAmt) * (1.0 - puddle) * (1.0 - wet * 0.75);
             vec3 dpx = dFdx(vWPos), dpy = dFdy(vWPos);
             vec3 r1 = cross(dpy, nW), r2 = cross(nW, dpx);
             float det = dot(dpx, r1);
@@ -280,7 +298,7 @@ export function createTerrainMaterial(world) {
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v5';
+  mat.customProgramCacheKey = () => 'terrain-v7';
   { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); }; }
   return mat;
 }

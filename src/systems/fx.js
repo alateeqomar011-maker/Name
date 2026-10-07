@@ -1,5 +1,6 @@
 // Lightweight CPU particle system (splashes, dust, smoke, fire, embers, sparks).
 import * as THREE from 'three';
+import { LAYER_OVERLAY } from './postfx.js';
 
 function softTex() {
   const c = document.createElement('canvas');
@@ -35,6 +36,7 @@ class Pool {
     this.points = new THREE.Points(this.geo, this.mat);
     this.points.frustumCulled = false;
     this.points.renderOrder = 5;
+    this.points.layers.set(LAYER_OVERLAY);
     scene.add(this.points);
     this.parts = [];
   }

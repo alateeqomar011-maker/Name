@@ -1,6 +1,7 @@
 // Dynamic, region-aware weather: clear skies, clouds, fog, rain, heavy rain, thunderstorms with lightning,
 // wind, snow & blizzards in the mountains, sandstorms in the badlands. Surfaces get wet and puddles form.
 import * as THREE from 'three';
+import { LAYER_OVERLAY } from './postfx.js';
 import { U } from '../world/shaderlib.js';
 import { BIOME } from '../world/worldgen.js';
 import { clamp, lerp, smoothstep } from '../core/noise.js';
@@ -87,6 +88,7 @@ export class Weather {
     this.precip = new THREE.Mesh(geo, mat);
     this.precip.frustumCulled = false;
     this.precip.renderOrder = 6;
+    this.precip.layers.set(LAYER_OVERLAY);
     this.game.scene.add(this.precip);
   }
 
@@ -118,6 +120,7 @@ export class Weather {
     pts[pts.length - 1].set(x, gy, z);
     const curve = new THREE.CatmullRomCurve3(pts, false, 'catmullrom', 0.1);
     const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 60, 1.6, 4, false), this.boltMat);
+    tube.layers.set(LAYER_OVERLAY);
     this.bolt.add(tube);
     this.boltMat.opacity = 1;
     this.flash = 1;

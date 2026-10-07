@@ -96,7 +96,7 @@ export class Grass {
           vec3 base = pow(g.rgb, vec3(2.2));
           // lush green patches mixed into dry grassland, per-clump hue variation
           vec2 mv = meadowVar(wp);
-          float grassy = smoothstep(0.0, 0.02, base.g - max(base.r * 0.9, base.b));
+          float grassy = smoothstep(0.005, 0.03, base.g - base.r) * smoothstep(0.005, 0.03, base.g - base.b);
           base = mix(base, vec3(0.075, 0.13, 0.03), mv.x * 0.55 * step(base.g, base.r * 1.6 + 0.2));
           base = mix(base, base * vec3(1.45, 1.12, 0.5) + vec3(0.03, 0.018, 0.0), mv.y * 0.55 * grassy);
           base *= vec3(0.9 + 0.2 * aOffset.z, 0.92 + 0.16 * fract(aOffset.z * 7.3), 0.9);

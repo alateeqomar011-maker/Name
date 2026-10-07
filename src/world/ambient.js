@@ -1,6 +1,7 @@
 // Ambient life that makes the world feel inhabited: bird flocks, butterflies, dragonflies over water,
 // fireflies at night, drifting pollen/dust in the light, falling leaves under canopies and jumping fish.
 import * as THREE from 'three';
+import { LAYER_OVERLAY } from '../systems/postfx.js';
 import { U } from './shaderlib.js';
 import { atmospherePatch } from './atmosphere.js';
 import { BIOME } from './worldgen.js';
@@ -82,6 +83,7 @@ function glowPoints(count, color, size) {
   });
   const pts = new THREE.Points(g, m);
   pts.frustumCulled = false;
+  pts.layers.set(LAYER_OVERLAY);
   return pts;
 }
 

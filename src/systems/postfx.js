@@ -96,3 +96,59 @@ export class GodRaysPass extends Pass {
   }
   dispose() { this.material.dispose(); this.fsQuad.dispose(); }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Water compositing pass. The main RenderPass draws only layer 0 (opaque world + sky). This pass
+// copies that frame's colour and depth into the next buffer, then draws the water (layer 1) while
+// sampling the untouched originals for screen-space reflections, refraction and depth-based
+// light absorption. Unlit particles (layer 2) are drawn last so splashes, mist and rain stay
+// visible over the water.
+export const LAYER_WATER = 1;
+export const LAYER_OVERLAY = 2;
+export const SSR_U = {
+  tSceneColor: { value: null }, tSceneDepth: { value: null }, uResolution: { value: new THREE.Vector2(1, 1) },
+  uCamNear: { value: 0.15 }, uCamFar: { value: 9000 }, uSSR: { value: 0 },
+};
+
+export class WaterPass extends Pass {
+  constructor(scene, camera) {
+    super();
+    this.scene = scene;
+    this.camera = camera;
+    this.copyMat = new THREE.ShaderMaterial({
+      uniforms: { tColor: { value: null }, tDepth: { value: null } },
+      vertexShader: shader.vertexShader,
+      fragmentShader: `uniform sampler2D tColor; uniform sampler2D tDepth; varying vec2 vUv;
+        void main(){ gl_FragColor = texture2D(tColor, vUv); gl_FragDepth = texture2D(tDepth, vUv).r; }`,
+      depthTest: true, depthWrite: true, depthFunc: THREE.AlwaysDepth,
+    });
+    this.fsQuad = new FullScreenQuad(this.copyMat);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const cam = this.camera;
+    SSR_U.tSceneColor.value = readBuffer.texture;
+    SSR_U.tSceneDepth.value = readBuffer.depthTexture;
+    SSR_U.uResolution.value.set(readBuffer.width, readBuffer.height);
+    SSR_U.uCamNear.value = cam.near;
+    SSR_U.uCamFar.value = cam.far;
+    SSR_U.uSSR.value = 1;
+    this.copyMat.uniforms.tColor.value = readBuffer.texture;
+    this.copyMat.uniforms.tDepth.value = readBuffer.depthTexture;
+    renderer.setRenderTarget(writeBuffer);
+    this.fsQuad.render(renderer);
+    const mask = cam.layers.mask;
+    const ac = renderer.autoClear, su = renderer.shadowMap.autoUpdate, bg = this.scene.background;
+    renderer.autoClear = false;
+    renderer.shadowMap.autoUpdate = false;
+    this.scene.background = null;
+    cam.layers.set(LAYER_WATER);
+    renderer.render(this.scene, cam);
+    cam.layers.set(LAYER_OVERLAY);
+    renderer.render(this.scene, cam);
+    cam.layers.mask = mask;
+    this.scene.background = bg;
+    renderer.autoClear = ac;
+    renderer.shadowMap.autoUpdate = su;
+  }
+  dispose() { this.copyMat.dispose(); this.fsQuad.dispose(); }
+}

@@ -351,7 +351,7 @@ export class World {
       const h = this.heights[i];
       let lit = 0, sand = 0, grav = 0, dry = 0;
       if (b === BIOME.FOREST || b === BIOME.JUNGLE || b === BIOME.PINEFOREST) lit = Math.min(1, 0.35 + v * 1.2);
-      else if (b === BIOME.SWAMP) lit = 0.3 + v * 0.4;
+      else if (b === BIOME.SWAMP) lit = 0.15 + v * 0.25;
       else if (b === BIOME.GRASSLAND) lit = v * 0.35;
       if (b === BIOME.BEACH || b === BIOME.ISLAND && h < 4) sand = 1;
       else if (b === BIOME.DESERT) sand = 0.85;
@@ -368,6 +368,21 @@ export class World {
       else if (b === BIOME.VOLCANIC) dry = 0.35;
       sf[i * 4] = lit * 255; sf[i * 4 + 1] = sand * 255; sf[i * 4 + 2] = grav * 255; sf[i * 4 + 3] = dry * 255;
     }
+    // second surface layer: r = swamp mud / standing water, g = moss & algae
+    const s2 = new Uint8Array(N * N * 4);
+    for (let i = 0; i < N * N; i++) {
+      const b = this.biomes[i];
+      const h = this.heights[i];
+      let mud = 0, moss = 0;
+      if (b === BIOME.SWAMP) { mud = h < 6 ? 1 : 0.6; moss = 0.7; }
+      else if (b === BIOME.JUNGLE) { mud = 0.25; moss = 0.5; }
+      else if (b === BIOME.FOREST) moss = 0.3;
+      s2[i * 4] = mud * 255; s2[i * 4 + 1] = moss * 255; s2[i * 4 + 3] = 255;
+    }
+    this.surfTex2 = new THREE.DataTexture(s2, N, N, THREE.RGBAFormat);
+    this.surfTex2.magFilter = THREE.LinearFilter;
+    this.surfTex2.minFilter = THREE.LinearFilter;
+    this.surfTex2.needsUpdate = true;
     this.surfTex = new THREE.DataTexture(sf, N, N, THREE.RGBAFormat);
     this.surfTex.magFilter = THREE.LinearFilter;
     this.surfTex.minFilter = THREE.LinearFilter;

@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './ui/style.css';
-import { GodRaysPass } from './systems/postfx.js';
+import { GodRaysPass, WaterPass } from './systems/postfx.js';
 
 import { Emitter } from './core/events.js';
 import { Input } from './core/input.js';
@@ -291,6 +291,8 @@ class Game extends Emitter {
     }
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
+    this.waterPass = new WaterPass(this.scene, this.camera);
+    this.composer.addPass(this.waterPass);
     this.godRays = new GodRaysPass();
     this.composer.addPass(this.godRays);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.24, 0.4, 0.92);

@@ -1,6 +1,7 @@
 // Ocean, rivers and waterfalls with animated, depth-aware shading.
 import * as THREE from 'three';
 import { U, GLSL_NOISE, GLSL_HEIGHT } from './shaderlib.js';
+import { SSR_U, LAYER_WATER, LAYER_OVERLAY } from '../systems/postfx.js';
 
 const waterVert = /* glsl */ `
 uniform float uTime; uniform float uWaveAmp; uniform float uLevel; uniform vec3 uOrigin;
@@ -44,8 +45,13 @@ const waterFrag = /* glsl */ `
 uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 uHorizon; uniform vec3 uZenith;
 uniform vec3 uFogColor; uniform float uFogDensity; uniform float uRain; uniform float uNight; uniform sampler2D uMaskTex;
 uniform float uFlash; uniform float uUnder;
+uniform sampler2D tSceneColor; uniform sampler2D tSceneDepth; uniform vec2 uResolution; uniform float uCamNear; uniform float uCamFar; uniform float uSSR;
+uniform mat4 projectionMatrix;
 varying vec3 vWPos; varying float vDepth; varying vec2 vFlowUV; varying float vSteep; varying vec3 vWaveN;
 ${GLSL_NOISE}
+${GLSL_HEIGHT}
+float ssrViewZFromD(float d){ return (uCamNear * uCamFar) / ((uCamFar - uCamNear) * d - uCamFar); }
+float ssrViewZ(vec2 uv){ return ssrViewZFromD(texture2D(tSceneDepth, uv).r); }
 vec2 nGrad(vec2 p){ float e = 0.08; float h = vnoise(p); return vec2(vnoise(p + vec2(e,0.0)) - h, vnoise(p + vec2(0.0,e)) - h) / e; }
 void main(){
   vec3 V = normalize(cameraPosition - vWPos);
@@ -80,19 +86,97 @@ void main(){
   spec *= smoothstep(-0.05, 0.1, uSunDir.y) * (1.0 - uRain * 0.7);
   vec2 muv = (vWPos.xz + 2048.0) / 4096.0;
   vec4 mask = texture2D(uMaskTex, muv);
-  float depth = max(vDepth, 0.0);
+  // per-pixel depth from the heightfield (river strips only have vertices on the banks)
+  float depth = max(vWPos.y - worldHeight(vWPos.xz), 0.0);
   vec3 shallow = vec3(0.07, 0.42, 0.42);
   vec3 deep = vec3(0.005, 0.05, 0.1);
   #ifndef OCEAN
     shallow = vec3(0.12, 0.33, 0.28); deep = vec3(0.02, 0.09, 0.1);
   #endif
   vec3 body = mix(shallow, deep, 1.0 - exp(-depth * 0.18));
-  body = mix(body, vec3(0.07, 0.09, 0.03), mask.r * 0.85);
+  body = mix(body, vec3(0.05, 0.06, 0.02), mask.r * 0.85);
   float dayL = mix(0.06, 1.0, 1.0 - uNight);
   body *= dayL * (0.65 + 0.35 * max(uSunDir.y, 0.0));
   // subsurface glow on wave crests facing sun
   body += vec3(0.0, 0.08, 0.07) * max(dot(V, -uSunDir), 0.0) * (1.0 - uNight) * 0.6;
-  vec3 col = mix(body, sky, fres);
+  vec3 col;
+  float opaqueOut = 0.0;
+  if (uSSR > 0.5 && gl_FrontFacing) {
+    vec2 suv = gl_FragCoord.xy / uResolution;
+    vec3 vp = (viewMatrix * vec4(vWPos, 1.0)).xyz;
+    float wz = -vp.z;
+    // refraction of the bed through the moving surface (never pull in objects in front of the water)
+    vec2 roff = vec2(g.x, -g.y) * 0.03 * (0.4 + 0.6 * detail) / max(1.0, wz * 0.035);
+    vec2 ruv = clamp(suv + roff, vec2(0.001), vec2(0.999));
+    float sz = -ssrViewZ(ruv);
+    if (sz < wz) { ruv = suv; sz = -ssrViewZ(suv); }
+    float thick = clamp(sz - wz, 0.0, 400.0);
+    vec3 refr = texture2D(tSceneColor, ruv).rgb;
+    #ifdef OCEAN
+      vec3 sigma = vec3(0.34, 0.07, 0.05);
+    #else
+      vec3 sigma = mix(vec3(0.42, 0.13, 0.11), vec3(1.2, 1.0, 1.35), mask.r);
+    #endif
+    vec3 trans = exp(-sigma * thick);
+    // in-scattered light from the water volume itself: dim, the colour of deep water
+    #ifdef OCEAN
+      vec3 scat = body * 0.42;
+    #else
+      vec3 scat = body * mix(0.26, 0.4, mask.r);
+    #endif
+    vec3 under = refr * trans + scat * (1.0 - trans);
+    // screen-space reflection march with binary refinement
+    vec3 Nv = normalize((viewMatrix * vec4(N, 0.0)).xyz);
+    vec3 Rv = normalize(reflect(normalize(vp), Nv));
+    vec3 refl = sky;
+    float hitA = 0.0;
+    vec3 rp = vp;
+    float stepL = 0.3 + wz * 0.018;
+    for (int i = 0; i < 30; i++) {
+      vec3 prev = rp;
+      rp += Rv * stepL;
+      vec4 cp = projectionMatrix * vec4(rp, 1.0);
+      if (cp.w <= 0.0) break;
+      vec2 uv = cp.xy / cp.w * 0.5 + 0.5;
+      if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) break;
+      float d = texture2D(tSceneDepth, uv).r;
+      if (d < 0.99999) {
+        float sceneZ = -ssrViewZFromD(d);
+        float rz = -rp.z;
+        if (rz > sceneZ && rz - sceneZ < stepL * 2.0 + 0.6) {
+          vec3 a = prev, b = rp;
+          for (int k = 0; k < 5; k++) {
+            vec3 m = (a + b) * 0.5;
+            vec4 mc = projectionMatrix * vec4(m, 1.0);
+            float ms = -ssrViewZ(mc.xy / mc.w * 0.5 + 0.5);
+            if (-m.z > ms) b = m; else a = m;
+          }
+          vec4 bc = projectionMatrix * vec4(b, 1.0);
+          vec2 huv = bc.xy / bc.w * 0.5 + 0.5;
+          vec2 e = smoothstep(vec2(0.0), vec2(0.07), huv) * smoothstep(vec2(1.0), vec2(0.93), huv);
+          hitA = e.x * e.y * (1.0 - smoothstep(0.6, 1.0, float(i) / 30.0));
+          refl = mix(sky, texture2D(tSceneColor, huv).rgb, hitA);
+          break;
+        }
+      }
+      stepL *= 1.14;
+    }
+    if (hitA < 0.01) {
+      // the reflected sky, clouds and sun glow come straight from the rendered sky when on screen
+      vec4 sc = projectionMatrix * vec4(vp + Rv * 4000.0, 1.0);
+      if (sc.w > 0.0) {
+        vec2 su = sc.xy / sc.w * 0.5 + 0.5;
+        if (su.x > 0.0 && su.x < 1.0 && su.y > 0.0 && su.y < 1.0 && texture2D(tSceneDepth, su).r >= 0.99999) {
+          vec2 e = smoothstep(vec2(0.0), vec2(0.1), su) * smoothstep(vec2(1.0), vec2(0.9), su);
+          refl = mix(sky, texture2D(tSceneColor, su).rgb * 0.9, e.x * e.y);
+        }
+      }
+    }
+    col = mix(under, refl, fres);
+    opaqueOut = 1.0;
+  } else {
+    col = mix(body, sky, fres);
+  }
   col += uSunColor * spec;
   // foam
   float foamN = vnoise(vWPos.xz * 1.3 + uTime * 0.3) * 0.6 + vnoise(vWPos.xz * 4.0 - uTime * 0.2) * 0.4;
@@ -100,14 +184,17 @@ void main(){
   #ifdef OCEAN
     foam = smoothstep(1.2, 0.0, depth) * smoothstep(0.35, 0.65, foamN + 0.25 * sin(uTime * 1.5 - depth * 3.0));
   #else
-    foam = smoothstep(0.35, 1.0, vSteep) * smoothstep(0.35, 0.65, foamN) + smoothstep(0.4, 0.0, depth) * 0.25 * foamN;
-    foam += smoothstep(0.88, 1.0, abs(vFlowUV.x - 0.5) * 2.0) * 0.2 * foamN;
+    // whitewater streaks stretched along the current, racing downstream
+    float sp = 0.6 + vSteep * 3.0;
+    float streak = vnoise(vec2(vFlowUV.x * 9.0, vFlowUV.y * 0.3 - uTime * sp)) * 0.6 + vnoise(vec2(vFlowUV.x * 23.0 + 3.0, vFlowUV.y * 0.9 - uTime * sp * 1.4)) * 0.4;
+    foam = smoothstep(0.4, 1.0, vSteep) * smoothstep(0.5, 0.75, streak) * 0.85 + smoothstep(0.12, 0.0, depth) * 0.12 * foamN;
   #endif
   col = mix(col, vec3(0.92, 0.95, 0.97) * dayL, clamp(foam, 0.0, 1.0));
   col += vec3(0.5, 0.55, 0.7) * uFlash * 0.4;
   float alpha = mix(0.35, 0.96, smoothstep(0.0, 2.5, depth));
   alpha = max(alpha, foam);
   alpha = max(alpha, fres);
+  if (opaqueOut > 0.5) alpha = 1.0;
   if (!gl_FrontFacing) { col = vec3(0.04, 0.2, 0.22) * dayL + uSunColor * pow(max(dot(-V, uSunDir), 0.0), 20.0) * 0.5; alpha = 0.9; }
   // fog
   // height fog matching the global atmosphere
@@ -133,6 +220,7 @@ function makeWaterMaterial(world, ocean, extra) {
     uZenith: extra.zenith, uFogColor: U.uFogColor, uFogDensity: U.uFogDensity, uRain: U.uRain, uNight: U.uNight,
     uFlash: U.uFlash, uHeightTex: { value: world.heightTex }, uMaskTex: { value: world.maskTex },
     uWaveAmp: extra.waveAmp, uLevel: ocean ? extra.seaLevel : extra.riverOffset, uOrigin: extra.origin, uUnder: extra.under,
+    ...SSR_U,
   };
   return new THREE.ShaderMaterial({
     uniforms, vertexShader: waterVert, fragmentShader: waterFrag,
@@ -216,6 +304,7 @@ export class Water {
     this.ocean = new THREE.Mesh(oceanGeometry(), this.oceanMat);
     this.ocean.frustumCulled = false;
     this.ocean.renderOrder = 1;
+    this.ocean.layers.set(LAYER_WATER);
     scene.add(this.ocean);
 
     this.riverMat = makeWaterMaterial(world, false, this.extra);
@@ -223,6 +312,7 @@ export class Water {
     for (const R of world.rivers) {
       const m = new THREE.Mesh(riverGeometry(R), this.riverMat);
       m.renderOrder = 2;
+      m.layers.set(LAYER_WATER);
       scene.add(m);
       this.rivers.push(m);
     }
@@ -241,6 +331,7 @@ export class Water {
         const mat = new THREE.PointsMaterial({ map: mistTex, size: 7, transparent: true, opacity: 0.35, depthWrite: false, color: 0xe8f2f4, sizeAttenuation: true });
         const pts = new THREE.Points(g, mat);
         pts.frustumCulled = false;
+        pts.layers.set(LAYER_OVERLAY);
         scene.add(pts);
         const bx = R.x[Math.min(R.x.length - 1, wf.i1)], bz = R.z[Math.min(R.z.length - 1, wf.i1)];
         this.falls.push({ wf, pts, seeds, bx, bz, by: wf.bottom, river: R });
