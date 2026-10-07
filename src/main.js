@@ -165,6 +165,8 @@ class Game extends Emitter {
     const c = this.pois.camp;
     this.player.pos.set(c.x + 6, this.world.getHeight(c.x + 6, c.z + 10), c.z + 10);
     this.player.respawn.set(c.x + 4, 0, c.z + 4);
+    this.mountainSpawn = this._findMountainSpawn();
+    this.veg.addExclusion(this.mountainSpawn.x, this.mountainSpawn.z, 12);
     await step(88, 'Building terrain…');
     this.terrain.buildAll(this.player.pos.x, this.player.pos.z);
     for (let i = 0; i < 80; i++) this.veg.update(this.player.pos.x, this.player.pos.z, 0.016, 0);
@@ -187,6 +189,28 @@ class Game extends Emitter {
     canvas.addEventListener('click', () => { if (matchMedia('(pointer: coarse)').matches) return; if (this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal) this.input.lock(); });
     addEventListener('keydown', (e) => { if (e.code === 'F5') { e.preventDefault(); if (this.state === 'playing') { this.save(); this.ui.notify('Game saved.', 'good'); } } });
     window.__game = this;
+  }
+
+  // A safe, flat, scenic spot in the mountain foothills (below the freezing snowline)
+  _findMountainSpawn() {
+    const w = this.world;
+    let best = null, bs = -Infinity;
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 6000; i++) {
+      const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 650;
+      const x = -180 + Math.cos(a) * r, z = -1380 + Math.sin(a) * r;
+      if (!w.inBounds(x, z)) continue;
+      const h = w.getHeight(x, z);
+      if (w.getBiome(x, z) !== BIOME.MOUNTAIN || h < 90 || h > 240) continue;
+      if (w.getNormal(x, z).y < 0.93 || w.waterLevelAt(x, z) > h - 1) continue;
+      let flat = true;
+      for (let k = 0; k < 12 && flat; k++) { const aa = (k / 12) * Math.PI * 2; for (const rr of [8, 16]) if (Math.abs(w.getHeight(x + Math.cos(aa) * rr, z + Math.sin(aa) * rr) - h) > rr * 0.45) flat = false; }
+      if (!flat) continue;
+      const score = h - Math.hypot(x + 180, z - -1100) * 0.05;
+      if (score > bs) { bs = score; best = { x, z }; }
+    }
+    return best || { x: this.pois.camp.x + 6, z: this.pois.camp.z + 10 };
   }
 
   _showTitleMenu() {
@@ -223,15 +247,20 @@ class Game extends Emitter {
       this.inventory.add('bandage', 2, true);
       this.inventory.add('flare', 3, true);
       this.inventory.add('berries', 4, true);
+      // New expeditions begin up in the Titan Range mountains
+      const m = this.mountainSpawn;
+      this.player.pos.set(m.x, this.world.getHeight(m.x, m.z), m.z);
+      this.terrain.buildAll(m.x, m.z);
+      for (let i = 0; i < 80; i++) this.veg.update(m.x, m.z, 0.016, 0);
       const c = this.pois.camp;
-      this.cam.yaw = Math.atan2(c.x - this.player.pos.x, c.z - this.player.pos.z);
+      this.cam.yaw = Math.atan2(c.x - m.x, c.z - m.z);
     }
     document.getElementById('title').classList.add('hidden');
     document.getElementById('hud').classList.remove('off');
     this.state = 'playing';
     this.input.lock();
-    this.cam.pitch = -0.1;
-    if (!load) this.ui.banner('BASE CAMP ECHO', 'Verdant Plains · Day 1');
+    this.cam.pitch = -0.28;
+    if (!load) this.ui.banner('TITAN RANGE', 'The mountains · Day 1');
     this.journal.regions.add(this.world.regionAt(this.player.pos.x, this.player.pos.z).id);
     this.autosaveT = 60;
   }

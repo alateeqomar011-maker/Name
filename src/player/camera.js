@@ -75,7 +75,7 @@ export class CameraRig {
         const t = i / 8;
         const x = lerp(T.x, D.x, t), y = lerp(T.y, D.y, t), z = lerp(T.z, D.z, t);
         const h = g.caves.active ? g.caves.ceilingClamp(x, y, z) : g.world.getHeight(x, z) + 0.4;
-        if (y < h) { best = Math.max(0.6, dist * (t - 0.12)); break; }
+        if (y < h) { best = Math.max(g.caves.active ? 0.6 : 2.4, dist * (t - 0.12)); break; }
       }
       if (g.caves.active) best = Math.min(best, g.caves.maxBoom());
       cam.position.copy(T).addScaledVector(fwd, -best).addScaledVector(right, -side * (best / dist));
@@ -92,8 +92,9 @@ export class CameraRig {
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
     this.binoculars = targetFov < 20 && !this.zoomFov;
 
-    this._look.copy(cam.position).add(fwd);
-    cam.lookAt(this._look);
+    const lookT = this._lookT || (this._lookT = new THREE.Vector3());
+    lookT.copy(cam.position).add(fwd);
+    cam.lookAt(lookT);
     // shake
     if (this.trauma > 0) {
       const s = this.trauma * this.trauma;
