@@ -820,12 +820,18 @@ function buildMarine(spec) {
   const addBone = (name, parent, pos) => { bones.push({ name, parent, pos: pos.clone() }); return bones.length - 1; };
   const keys = [];
   const n = 16;
-  for (let k = 0; k <= n; k++) {
-    const t = k / n; // 0 = tail tip, 1 = snout
-    const z = -L * 0.55 + t * L;
-    let r = R * Math.pow(Math.sin(Math.PI * Math.min(1, 0.05 + t * 0.98)), 0.75);
-    if (t > 0.85) r *= 1 - (t - 0.85) * 3.2;
-    keys.push({ z, r: Math.max(0.03, r) });
+  // streamlined body, a slight neck, a deep skull with jaw muscles and a blunt crocodilian snout
+  const prof = [[0, 0.05], [0.25, 0.36], [0.5, 0.86], [0.62, 1.0], [0.74, 0.9], [0.83, 0.66], [0.87, 0.74], [0.93, 0.52], [0.98, 0.34], [1.0, 0.2]];
+  const profAt = (t) => {
+    let i = 0;
+    while (i < prof.length - 2 && prof[i + 1][0] < t) i++;
+    const [t0, r0] = prof[i], [t1, r1] = prof[i + 1];
+    const u = Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+    return r0 + (r1 - r0) * u * u * (3 - 2 * u);
+  };
+  for (let k = 0; k <= n * 2; k++) {
+    const t = k / (n * 2); // 0 = tail tip, 1 = snout
+    keys.push({ z: -L * 0.55 + t * L, r: Math.max(0.03, R * profAt(t)) });
   }
   const root = addBone('root', -1, v3(0, 0, 0));
   const chain = [];
@@ -846,15 +852,24 @@ function buildMarine(spec) {
   };
   const body = tube(keys.map((k) => ({ p: v3(0, 0, k.z), r: k.r })), 14, 4, 0.85);
   parts.push(finishPart(body, [1, 1, 1], 0, (x, y, z, o) => skinZ(z, o)));
-  // tail fin (crescent)
+  // shark-like tail fluke: a large down-turned lower lobe and a smaller upper lobe
   const tz = -L * 0.55;
-  parts.push(finishPart(fan([v3(0, 0, tz + L * 0.06), v3(0, -R * 1.4, tz - R * 0.4), v3(0, -R * 0.3, tz + 0.1), v3(0, R * 0.6, tz - R * 0.2)]), [1, 1, 1], 2, rigid(tailB[tailB.length - 1])));
-  // flippers
-  for (const [zf, size, b] of [[L * 0.1, 1.0, chest], [-L * 0.12, 0.8, root]]) {
+  parts.push(finishPart(fan([v3(0, 0, tz + L * 0.08), v3(0, -R * 2.3, tz - R * 0.9), v3(0, -R * 1.1, tz - R * 0.2), v3(0, -R * 0.1, tz + R * 0.1), v3(0, R * 0.9, tz - R * 0.6), v3(0, R * 0.25, tz + L * 0.04)]), [1, 1, 1], 2, rigid(tailB[tailB.length - 1])));
+  // low dorsal keel along the tail
+  parts.push(finishPart(fan([v3(0, R * 0.3, -L * 0.12), v3(0, R * 0.55, -L * 0.3), v3(0, R * 0.3, -L * 0.45), v3(0, R * 0.2, -L * 0.2)]), [1, 1, 1], 2, (x, y, z, o) => skinZ(z, o)));
+  // broad paddle flippers
+  for (const [zf, size, b] of [[L * 0.12, 1.45, chest], [-L * 0.1, 1.1, root]]) {
     for (const sd of [-1, 1]) {
-      const base = v3(sd * R * 0.8, -R * 0.3, zf);
-      parts.push(finishPart(fan([base, base.clone().add(v3(sd * R * 1.8 * size, -R * 0.4, -R * 0.8 * size)), base.clone().add(v3(sd * R * 1.6 * size, -R * 0.35, -R * 1.5 * size)), base.clone().add(v3(0, 0, -R * 0.9 * size))]), [1, 1, 1], 0, rigid(b)));
+      const base = v3(sd * R * 0.75, -R * 0.35, zf);
+      parts.push(finishPart(fan([base, base.clone().add(v3(sd * R * 0.9 * size, -R * 0.25, R * 0.15 * size)), base.clone().add(v3(sd * R * 1.9 * size, -R * 0.45, -R * 0.55 * size)), base.clone().add(v3(sd * R * 2.1 * size, -R * 0.5, -R * 1.25 * size)), base.clone().add(v3(sd * R * 0.9 * size, -R * 0.35, -R * 1.2 * size)), base.clone().add(v3(0, 0, -R * 0.8 * size))]), [1, 1, 1], 0, rigid(b)));
     }
+  }
+  // lower jaw, hinged so the mouth can gape
+  {
+    const jz0 = -L * 0.55 + 0.84 * L, jz1 = -L * 0.55 + 0.995 * L;
+    const pts = [];
+    for (let k = 0; k <= 5; k++) { const t = k / 5; pts.push({ p: v3(0, -R * (0.36 - 0.12 * t), jz0 + (jz1 - jz0) * t), r: R * (0.5 - 0.32 * t) }); }
+    parts.push(finishPart(tube(pts, 10, 2, 0.55), [1, 1, 1], 0, rigid(jaw)));
   }
   // teeth & eyes
   for (let k = 0; k < 8; k++) {
