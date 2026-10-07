@@ -110,9 +110,18 @@ void main(){
   alpha = max(alpha, fres);
   if (!gl_FrontFacing) { col = vec3(0.04, 0.2, 0.22) * dayL + uSunColor * pow(max(dot(-V, uSunDir), 0.0), 20.0) * 0.5; alpha = 0.9; }
   // fog
-  float fogF = 1.0 - exp(-uFogDensity * uFogDensity * dist * dist);
+  // height fog matching the global atmosphere
+  float hf = 0.0055;
+  float h0 = clamp(cameraPosition.y, -30.0, 3000.0), h1 = clamp(vWPos.y, -30.0, 3000.0);
+  float dh = h1 - h0;
+  float hInt = abs(dh) > 0.5 ? (exp(-hf * h0) - exp(-hf * h1)) / (hf * dh) : exp(-hf * h0);
+  float hTerm = clamp(0.22 + 1.6 * hInt, 0.0, 2.4);
+  float fd = uFogDensity * dist;
+  float fogF = 1.0 - exp(-(fd * fd * hTerm + fd * 0.22 * hTerm));
   if (uUnder > 0.5) fogF = 0.0;
-  col = mix(col, uFogColor, fogF);
+  vec3 vdir = -V;
+  float sunAmt = pow(max(dot(vdir, uSunDir), 0.0), 7.0) * smoothstep(-0.05, 0.15, uSunDir.y);
+  col = mix(col, mix(uFogColor, uSunColor * 0.9 + uFogColor * 0.35, sunAmt * 0.65), clamp(fogF, 0.0, 1.0));
   gl_FragColor = vec4(col, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

@@ -1,5 +1,6 @@
 // GPU-placed grass field that wraps around the camera. Heights and density come from world textures.
 import * as THREE from 'three';
+import { atmospherePatch, TRANSLUCENCY } from './atmosphere.js';
 import { U, GLSL_HEIGHT, GLSL_NOISE } from './shaderlib.js';
 
 export class Grass {
@@ -10,17 +11,18 @@ export class Grass {
     // Blade clump geometry (5 blades, 4 segments each)
     const blade = new THREE.BufferGeometry();
     const pos = [], uvs = [], idx = [];
-    const BL = 5, SEG = 4;
+    const BL = 8, SEG = 4;
     for (let b = 0; b < BL; b++) {
       const a = (b / BL) * Math.PI * 2 + b * 0.7;
-      const ox = Math.cos(a) * 0.18, oz = Math.sin(a) * 0.18;
+      const rr = 0.08 + ((b * 53) % 7) / 25;
+      const ox = Math.cos(a) * rr, oz = Math.sin(a) * rr;
       const dirA = a + 1.3;
       const dx = Math.cos(dirA), dz = Math.sin(dirA);
       const h = 0.42 + ((b * 37) % 10) / 28;
       const base = pos.length / 3;
       for (let s = 0; s <= SEG; s++) {
         const t = s / SEG;
-        const w = 0.055 * (1 - t * 0.9);
+        const w = 0.026 * (1 - t * 0.92);
         const lean = t * t * 0.35;
         const cx = ox + Math.cos(a) * lean, cz = oz + Math.sin(a) * lean;
         pos.push(cx - dx * w, t * h, cz - dz * w, cx + dx * w, t * h, cz + dz * w);
@@ -91,6 +93,10 @@ export class Grass {
           p.z += (uWindDir.y * gust + 0.3 * cos(ph * 1.2)) * bend;
           vec3 transformed = vec3(wp.x, h - 0.04, wp.y) + p;
           vec3 base = pow(g.rgb, vec3(2.2));
+          // lush green patches mixed into dry grassland, per-clump hue variation
+          float lushN = vnoise(wp * 0.018) * 0.7 + vnoise(wp * 0.07) * 0.3;
+          base = mix(base, vec3(0.075, 0.13, 0.03), smoothstep(0.35, 0.75, lushN) * 0.55 * step(base.g, base.r * 1.6 + 0.2));
+          base *= vec3(0.9 + 0.2 * aOffset.z, 0.92 + 0.16 * fract(aOffset.z * 7.3), 0.9);
           vec3 tipC = base * vec3(1.08, 1.22, 0.9) + vec3(0.02, 0.026, 0.004);
           vGrassCol = mix(base * 0.5, tipC, t) * (0.85 + 0.3 * vnoise(wp * 0.08));
           vGrassCol = mix(vGrassCol, vec3(0.85, 0.88, 0.92), uSnow * 0.6 * t);
@@ -102,6 +108,7 @@ export class Grass {
         .replace('#include <color_fragment>', `diffuseColor.rgb = vGrassCol;`);
     };
     mat.customProgramCacheKey = () => 'grass-v1';
+    { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.6, 0.35)); }; }
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;

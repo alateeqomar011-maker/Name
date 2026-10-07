@@ -276,6 +276,33 @@ export class World {
         }
       }
     }
+    // Baked ambient occlusion from the heightfield (hollows darker, crests lighter) and forest floor litter
+    const H2 = this.heights, V = this.veg;
+    for (let r = 0; r < N; r++) {
+      for (let c = 0; c < N; c++) {
+        const k = r * N + c;
+        const h = H2[k];
+        let sum = 0, cnt = 0;
+        for (let d = 2; d <= 6; d += 2) {
+          sum += this.hAt(c + d, r) + this.hAt(c - d, r) + this.hAt(c, r + d) + this.hAt(c, r - d);
+          cnt += 4;
+        }
+        const cav = sum / cnt - h; // >0 = hollow
+        let ao = clamp(1 - cav * 0.035, 0.62, 1.08);
+        const b = this.biomes[k];
+        const v = V[k] / 255;
+        let lr = 1, lg = 1, lb = 1, lit = 0;
+        if (b === BIOME.FOREST || b === BIOME.PINEFOREST || b === BIOME.JUNGLE || b === BIOME.SWAMP) {
+          lit = smoothstep(0.35, 0.85, v) * 0.55;
+          ao *= 1 - lit * 0.25; // canopy shade
+        }
+        for (let ch = 0; ch < 3; ch++) {
+          const litter = [92, 70, 44][ch];
+          C[k * 3 + ch] = lerp(C[k * 3 + ch], litter, lit) * ao;
+        }
+        void lr; void lg; void lb;
+      }
+    }
     for (let i = 0; i < C.length; i++) this.colors[i] = clamp(Math.round(C[i]), 0, 255);
   }
 
@@ -316,6 +343,35 @@ export class World {
     this.maskTex.magFilter = THREE.LinearFilter;
     this.maskTex.minFilter = THREE.LinearFilter;
     this.maskTex.needsUpdate = true;
+    // Surface material weights for close-up terrain detail: r = leaf litter, g = sand, b = gravel/stones, a = dry cracked earth
+    const sf = new Uint8Array(N * N * 4);
+    for (let i = 0; i < N * N; i++) {
+      const b = this.biomes[i];
+      const v = this.veg[i] / 255;
+      const h = this.heights[i];
+      let lit = 0, sand = 0, grav = 0, dry = 0;
+      if (b === BIOME.FOREST || b === BIOME.JUNGLE || b === BIOME.PINEFOREST) lit = Math.min(1, 0.35 + v * 1.2);
+      else if (b === BIOME.SWAMP) lit = 0.3 + v * 0.4;
+      else if (b === BIOME.GRASSLAND) lit = v * 0.35;
+      if (b === BIOME.BEACH || b === BIOME.ISLAND && h < 4) sand = 1;
+      else if (b === BIOME.DESERT) sand = 0.85;
+      else if (b === BIOME.CANYON) sand = 0.35;
+      if (h > -1 && h < 1.6 && b !== BIOME.SWAMP) sand = Math.max(sand, 0.8);
+      if (b === BIOME.MOUNTAIN || b === BIOME.SNOW) grav = 0.75;
+      else if (b === BIOME.VOLCANIC) grav = 0.9;
+      else if (b === BIOME.RIVER) grav = 0.85;
+      else if (b === BIOME.CANYON) grav = 0.5;
+      else if (b === BIOME.DESERT) grav = 0.2;
+      else if (b === BIOME.PINEFOREST) grav = 0.15;
+      if (b === BIOME.DESERT) dry = 0.45;
+      else if (b === BIOME.CANYON) dry = 0.8;
+      else if (b === BIOME.VOLCANIC) dry = 0.35;
+      sf[i * 4] = lit * 255; sf[i * 4 + 1] = sand * 255; sf[i * 4 + 2] = grav * 255; sf[i * 4 + 3] = dry * 255;
+    }
+    this.surfTex = new THREE.DataTexture(sf, N, N, THREE.RGBAFormat);
+    this.surfTex.magFilter = THREE.LinearFilter;
+    this.surfTex.minFilter = THREE.LinearFilter;
+    this.surfTex.needsUpdate = true;
   }
 
   _buildMapImage() {

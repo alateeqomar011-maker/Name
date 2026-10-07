@@ -6,6 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './ui/style.css';
+import { GodRaysPass } from './systems/postfx.js';
 
 import { Emitter } from './core/events.js';
 import { Input } from './core/input.js';
@@ -13,6 +14,7 @@ import { Clock } from './core/clock.js';
 import { World } from './world/world.js';
 import { REGIONS, BIOME, VOLCANO } from './world/worldgen.js';
 import { U } from './world/shaderlib.js';
+import { installAtmosphere, updateAtmosphere } from './world/atmosphere.js';
 import { Terrain } from './world/terrain.js';
 import { FloraLibrary } from './world/flora.js';
 import { Vegetation } from './world/vegetation.js';
@@ -21,6 +23,7 @@ import { Sky } from './world/sky.js';
 import { Water } from './world/water.js';
 import { POIs } from './world/pois.js';
 import { Caves } from './world/caves.js';
+import { AmbientLife } from './world/ambient.js';
 import { DinoManager } from './dinos/manager.js';
 import { SPECIES, SPECIES_LIST } from './dinos/species.js';
 import { Player } from './player/player.js';
@@ -73,8 +76,14 @@ const GradeShader = {
         float drop = smoothstep(0.12, 0.0, d) * step(0.75, r) * uWet;
         uv += f * drop * 0.05;
       }
+      vec2 cq = uv - 0.5;
+      float ca = dot(cq, cq) * 0.0022;
       vec4 col = texture2D(tDiffuse, uv);
+      col.r = texture2D(tDiffuse, uv - cq * ca * 4.0).r;
+      col.b = texture2D(tDiffuse, uv + cq * ca * 4.0).b;
       float l = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+      // filmic split toning: cool shadows, warm highlights
+      col.rgb *= mix(vec3(0.94, 0.98, 1.06), vec3(1.05, 1.0, 0.93), smoothstep(0.02, 0.9, l));
       col.rgb = mix(vec3(l), col.rgb, uSat);
       col.rgb += vec3(0.02, 0.008, -0.015) * uWarm;
       col.rgb = mix(col.rgb, col.rgb * vec3(0.55, 0.85, 0.9) + vec3(0.0, 0.03, 0.05), uUnder);
@@ -85,6 +94,8 @@ const GradeShader = {
       gl_FragColor = col;
     }`,
 };
+
+installAtmosphere();
 
 class Game extends Emitter {
   constructor() {
@@ -152,6 +163,7 @@ class Game extends Emitter {
     this.interact = new Interaction(this);
     this.joystick = new Joystick(this.input);
     this.joystick.setVisible(false);
+    this.ambient = new AmbientLife(this);
     await step(62, 'Raising ancient ruins…');
     this.pois = new POIs(this);
     this.pois.generate();
@@ -273,8 +285,14 @@ class Game extends Emitter {
   _setupComposer() {
     const r = this.renderer;
     this.composer = new EffectComposer(r);
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      rt.depthTexture = new THREE.DepthTexture(rt.width, rt.height);
+      rt.depthTexture.type = THREE.UnsignedIntType;
+    }
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.composer.addPass(this.renderPass);
+    this.godRays = new GodRaysPass();
+    this.composer.addPass(this.godRays);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.28, 0.55, 0.9);
     this.composer.addPass(this.bloom);
     this.grade = new ShaderPass(GradeShader);
@@ -449,6 +467,7 @@ class Game extends Emitter {
     if (this.events.ashTint > 0.05) { wp.tint = new THREE.Color(0.45, 0.35, 0.3); wp.tintAmt = this.events.ashTint; wp.fogTint = wp.tint; wp.cloud = Math.max(wp.cloud, this.events.ashTint); }
     this.sky.update(dt, this.clock.hour, wp, P, inCave);
     this.sky.follow(this.camera.position);
+    updateAtmosphere(this.camera, this.sky.sunDir, this.sky.sun.color.clone().multiplyScalar(Math.min(1.4, this.sky.sun.intensity / 2.4)), inCave ? 0 : this.weather.local.cloud, this.sky.cloudOffset, inCave ? 0.6 : 1 + this.weather.local.fog * 0.15);
     this.sky.updateEnvironment();
     if (!inCave) {
       this.terrain.update(P.x, P.z);
@@ -474,9 +493,18 @@ class Game extends Emitter {
     this.dinos.update(dt, { player: title ? { pos: new THREE.Vector3(0, -999, 0), alive: false } : p, playerNoise: title ? 0 : p.noise(), visibility: vis, night });
     this.pois.update(dt);
     this.fx.update(dt);
+    this.ambient.update(dt, P);
     // audio environment
     if (!title) this._audioEnv(dt);
     // grading
+    {
+      const sd = this.sky.sunDir;
+      const dayish = Math.max(0, Math.min(1, (sd.y + 0.02) * 4));
+      const strength = inCave || this.cam.underwater ? 0 : dayish * (1 - this.weather.local.cloud * 0.75) * (1 - this.weather.local.rain * 0.5);
+      const sc = this.sky.uniforms.uGlow.value.clone().multiplyScalar(0.5).add(U.uSunColor.value.clone().multiplyScalar(0.6));
+      this.godRays.setup(this.camera, sd, sc, strength, this.camera.aspect);
+      this.godRays.enabled = !!this.quality.bloom; // also sanitises the frame before bloom
+    }
     const G = this.grade.uniforms;
     G.uTime.value = U.uTime.value;
     G.uUnder.value = this.cam.underwater ? 1 : 0;

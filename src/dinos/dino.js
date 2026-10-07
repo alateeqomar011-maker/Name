@@ -701,6 +701,7 @@ export class Dino {
         this.strideAcc = 0;
         this.footSide = -this.footSide;
         this.mgr.addFootprint(this);
+        this.mgr.footfall(this);
       }
     }
     if (!this.flyer && !this.marine) {

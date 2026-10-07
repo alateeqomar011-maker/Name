@@ -157,12 +157,16 @@ function makeLeafAtlas() {
       const a = R(0, Math.PI * 2), r = Math.sqrt(rand()) * 100;
       leaf(ox + 128 + Math.cos(a) * r, oy + 128 + Math.sin(a) * r, R(16, 24), R(6, 9), a + R(-1, 1), `hsl(${R(100, 125)},${R(35, 55)}%,${R(20, 36)}%)`);
     }
-    for (let i = 0; i < 70; i++) {
-      const a = R(0, Math.PI * 2), r = Math.sqrt(rand()) * 92;
-      const x = ox + 128 + Math.cos(a) * r, y = oy + 128 + Math.sin(a) * r;
-      const g = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, 6);
-      g.addColorStop(0, '#ff8a8a'); g.addColorStop(0.5, '#c0182a'); g.addColorStop(1, '#5a0010');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R(4, 6.5), 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 26; i++) {
+      // small clusters of dark berries tucked between leaves
+      const a = R(0, Math.PI * 2), r = Math.sqrt(rand()) * 85;
+      const cx = ox + 128 + Math.cos(a) * r, cy = oy + 128 + Math.sin(a) * r;
+      for (let k = 0; k < 4; k++) {
+        const x = cx + R(-5, 5), y = cy + R(-5, 5);
+        const g = ctx.createRadialGradient(x - 1, y - 1, 0.5, x, y, 3.2);
+        g.addColorStop(0, '#e86a6a'); g.addColorStop(0.5, '#8a1020'); g.addColorStop(1, '#3a0510');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R(2.2, 3.2), 0, Math.PI * 2); ctx.fill();
+      }
     }
   }
   const tex = new THREE.CanvasTexture(cv);
@@ -255,7 +259,11 @@ export class GeoBuilder {
       const tilt = (rand() - 0.5) * 1.6;
       const U = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(radius);
       const V = new THREE.Vector3(-Math.sin(a) * Math.sin(tilt), Math.cos(tilt), Math.cos(a) * Math.sin(tilt)).multiplyScalar(radius);
-      this.card(c, U, V, tile, col, sway, center);
+      // canopy self-occlusion: inner and lower cards are darker
+      const inner = c.distanceTo(center) / (radius * 0.45 + 1e-4);
+      const below = (c.y - center.y) / radius;
+      const ao = Math.min(1.08, 0.58 + 0.32 * inner + 0.18 * (below + 0.4));
+      this.card(c, U, V, tile, [col[0] * ao, col[1] * ao, col[2] * ao], sway, center);
     }
   }
 
@@ -579,7 +587,7 @@ export class FloraLibrary {
     this.bark = makeBark();
     this.leafMat = addWind(new THREE.MeshStandardMaterial({
       map: this.atlas, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82, metalness: 0,
-    }), 1.0);
+    }), 1.0, true);
     this.leafMat.alphaToCoverage = true;
     this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, vertexColors: true, roughness: 0.95 }), 0.6);
     this.rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });

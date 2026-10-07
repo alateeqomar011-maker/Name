@@ -1,5 +1,6 @@
 // Shared shader uniforms and GLSL snippets.
 import * as THREE from 'three';
+import { atmospherePatch, TRANSLUCENCY } from './atmosphere.js';
 
 export const U = {
   uTime: { value: 0 },
@@ -44,7 +45,7 @@ float worldHeight(vec2 xz){
 `;
 
 // Wind sway injected into vegetation materials (expects attribute aSway, instancing)
-export function addWind(material, strength = 1) {
+export function addWind(material, strength = 1, translucent = false) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = U.uTime;
     shader.uniforms.uWind = U.uWind;
@@ -68,7 +69,9 @@ export function addWind(material, strength = 1) {
           transformed.x += sw * (wd.x * (0.6 + 0.4*sin(ph)) * gust + 0.18 * sin(ph * 2.7 + position.y * 1.3));
           transformed.z += sw * (wd.z * (0.6 + 0.4*sin(ph*0.9)) * gust + 0.18 * cos(ph * 2.3 + position.x * 1.7));
         }`);
+    atmospherePatch(shader);
+    if (translucent) shader.fragmentShader = shader.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.75, 0.3));
   };
-  material.customProgramCacheKey = () => 'wind' + strength;
+  material.customProgramCacheKey = () => 'wind' + strength + (translucent ? 't' : '');
   return material;
 }

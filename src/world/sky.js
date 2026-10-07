@@ -49,22 +49,50 @@ void main(){
     float band = exp(-pow(dot(dir, normalize(vec3(0.4, 0.5, 0.75))) * 3.5, 2.0));
     col += vec3(0.08, 0.08, 0.12) * band * uStars * fbm3(dir.xz * 12.0) * (1.0 - uCloudCover);
   }
-  // clouds
+  // high cirrus streaks
+  if (y > 0.0) {
+    vec2 ci = dir.xz / (y + 0.2) * 1.1 + uCloudOffset * 0.6;
+    float cir = fbm3(vec2(ci.x * 0.6 + ci.y * 0.3, ci.y * 4.0) * 1.7);
+    float cirA = smoothstep(0.58, 0.85, cir) * smoothstep(0.1, 0.4, y) * (0.35 + 0.3 * (1.0 - uCloudCover)) * (1.0 - uCloudDark);
+    vec3 cirC = mix(uHorizon * 1.15 + uSunColor * 0.25, uGlow * 1.2 + uHorizon, pow(sd, 3.0) * 0.6) * mix(1.0, 0.1, uNight);
+    col = mix(col, cirC, cirA * 0.6);
+  }
+  // volumetric-style cumulus: march through a slab layer with self-shadowing toward the sun
   if (y > -0.02) {
-    vec2 cuv = dir.xz / (y + 0.12) * 0.9 + uCloudOffset;
-    float n = fbm5(cuv * 1.3);
-    float n2 = fbm3(cuv * 4.5 + 3.0);
     float cov = uCloudCover;
-    float dens = smoothstep(1.0 - cov - 0.08, 1.0 - cov + 0.32, n * 0.85 + n2 * 0.25);
-    dens *= smoothstep(-0.02, 0.18, y);
-    // lighting: thicker clouds darker underneath, sun side brighter
-    float light = 0.55 + 0.45 * pow(sd, 3.0);
-    vec3 cBright = mix(uHorizon * 1.05 + vec3(0.06), uSunColor * 0.95 + uHorizon * 0.3, 0.45 * (1.0 - uNight));
-    vec3 cDark = mix(uHorizon * 0.55, vec3(0.16, 0.17, 0.19), uCloudDark);
-    vec3 cc = mix(cBright * light, cDark, clamp(n2 * 0.8 + uCloudDark * 0.7, 0.0, 1.0));
-    cc *= mix(1.0, 0.08, uNight);
-    cc += uGlow * pow(sd, 4.0) * 0.4 * dens;
-    col = mix(col, cc, clamp(dens, 0.0, 1.0));
+    vec2 sunXZ = normalize(uSunDir.xz + 0.0001) * (0.25 + (1.0 - max(uSunDir.y, 0.0)) * 0.35);
+    vec2 base = dir.xz / (y + 0.13) * 1.5;
+    float trans = 1.0;
+    vec3 acc = vec3(0.0);
+    vec3 amb = mix(uHorizon * 0.95, uZenith * 0.8 + uHorizon * 0.3, 0.5) * mix(1.0, 0.12, uNight);
+    vec3 sunC = uSunColor * mix(1.55, 0.05, uNight) * (1.0 - uCloudDark * 0.7);
+    float phase = 0.6 + 1.6 * pow(sd, 6.0) + 0.5 * pow(sd, 2.0);
+    float jit = hash12(gl_FragCoord.xy + fract(uTime) * 61.0);
+    for (int j = 0; j < 6; j++) {
+      float fj = float(j) + jit;
+      vec2 p = base * (1.0 + fj * 0.045) + uCloudOffset;
+      float shape = fbm5(p * 1.15);
+      float detail = fbm3(p * 4.2 + 7.0);
+      float h = clamp(fj / 6.0, 0.0, 1.0); // 0 = cloud base, 1 = top
+      float profile = smoothstep(0.0, 0.25, h) * smoothstep(1.0, 0.55, h) * (1.0 - 0.35 * h);
+      float lo = 0.74 - cov * 0.5;
+      float d = smoothstep(lo, lo + 0.17, shape * 0.78 + detail * 0.26 + profile * 0.05 - 0.02);
+      d *= 0.55 + 0.45 * profile;
+      if (d < 0.003) continue;
+      // light march toward the sun
+      vec2 ls = p + sunXZ * 0.12;
+      float occl = smoothstep(lo, lo + 0.17, fbm5(ls * 1.15) * 0.78 + fbm3(ls * 4.2 + 7.0) * 0.26);
+      float beer = exp(-occl * 2.6 - (1.0 - h) * 0.9 * cov);
+      float powder = 1.0 - exp(-d * 3.0);
+      vec3 lit = amb * (0.55 + 0.45 * h) + sunC * beer * phase * powder * 0.9;
+      lit = mix(lit, vec3(0.16, 0.17, 0.2) * mix(1.0, 0.15, uNight), uCloudDark * (1.0 - h * 0.5));
+      float a = d * 0.55;
+      acc += lit * a * trans;
+      trans *= 1.0 - a;
+    }
+    float fade = smoothstep(-0.01, 0.2, y);
+    vec3 cloudCol = acc / max(1.0 - trans, 0.001);
+    col = mix(col, cloudCol + uGlow * pow(sd, 4.0) * 0.25, (1.0 - trans) * fade);
   }
   col += vec3(0.55, 0.6, 0.85) * uFlash;
   col *= uTint;

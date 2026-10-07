@@ -344,6 +344,15 @@ export class AudioSys {
         if (s === 'wood' || s === 'rock') this._thump(dest, t, 120, 0.05, 0.08 * vol);
         break;
       }
+      case 'footfall': {
+        // heavy dinosaur footfall: sub-bass thump, ground crunch, and for giants a rolling rumble
+        const m = opts.mass || 1;
+        this._thump(dest, t, 70 / Math.sqrt(m), 0.18 + m * 0.06, Math.min(0.9, 0.25 * m) * vol);
+        this._noiseBurst(dest, t, 0.12 + m * 0.05, 'lowpass', 260 + 200 / m, 0.8, Math.min(0.5, 0.12 * m) * vol, this.brown, 0.004);
+        if (opts.surface === 'water') this._noiseBurst(dest, t, 0.45, 'bandpass', 700, 0.6, 0.25 * vol, this.white, 0.01);
+        else if (opts.surface === 'leaves') this._noiseBurst(dest, t, 0.18, 'bandpass', 2600, 0.6, 0.08 * vol, this.white, 0.01);
+        break;
+      }
       case 'jump': this._noiseBurst(dest, t, 0.12, 'lowpass', 700, 0.7, 0.15 * vol); break;
       case 'land': this._noiseBurst(dest, t, 0.18, 'lowpass', 400, 0.7, 0.3 * vol); this._thump(dest, t, 80, 0.15, 0.25 * vol); break;
       case 'splash': this._noiseBurst(dest, t, 0.6, 'bandpass', 1200, 0.5, 0.35 * vol, this.white, 0.02); break;

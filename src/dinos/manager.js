@@ -396,6 +396,51 @@ export class DinoManager {
     this.footprints[kind][i] = { x, z, heading: d.heading, spec: d.spec, herd: d.herd, t: this.game.clock.elapsed };
   }
 
+  // Footfall feedback near the player: dust or splashes, ground thuds and camera shake for giants
+  footfall(d) {
+    if (d.flyer || d.marine || d.lod > 1) return;
+    const g = this.game;
+    const P = g.camera.position;
+    const dx = d.pos.x - P.x, dz = d.pos.z - P.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist > 140) return;
+    const size = d.length * d.scale;
+    const mass = size / 6; // ~0.3 compy .. ~4 brachiosaurus
+    const w = this.world;
+    const side = d.footSide;
+    const fx = d.pos.x + Math.cos(d.heading) * d.radius * 0.6 * side, fz = d.pos.z - Math.sin(d.heading) * d.radius * 0.6 * side;
+    const gy = w.getHeight(fx, fz);
+    const wl = w.waterLevelAt(fx, fz);
+    const pos = this._ffPos || (this._ffPos = new THREE.Vector3());
+    pos.set(fx, Math.max(gy, wl), fz);
+    const fast = Math.min(1, d.speed / Math.max(1, d.spec.speed.walk * 1.5));
+    let surface = 'ground';
+    if (wl > gy + 0.05) {
+      surface = 'water';
+      if (size > 2) g.fx.splash(pos, Math.min(3, 0.4 + mass * 0.6) * (0.6 + fast * 0.6));
+    } else if (size > 2.5) {
+      const b = w.getBiome(fx, fz);
+      const tint = {
+        [BIOME.DESERT]: [0.72, 0.52, 0.36], [BIOME.CANYON]: [0.66, 0.44, 0.3], [BIOME.BEACH]: [0.8, 0.74, 0.6], [BIOME.ISLAND]: [0.78, 0.72, 0.58],
+        [BIOME.VOLCANIC]: [0.3, 0.27, 0.25], [BIOME.SNOW]: [0.92, 0.94, 0.98], [BIOME.MOUNTAIN]: [0.6, 0.58, 0.54], [BIOME.SWAMP]: [0.3, 0.28, 0.2],
+        [BIOME.FOREST]: [0.42, 0.34, 0.24], [BIOME.JUNGLE]: [0.38, 0.32, 0.22], [BIOME.PINEFOREST]: [0.45, 0.37, 0.27],
+      }[b] || [0.58, 0.5, 0.38];
+      if (b === BIOME.FOREST || b === BIOME.JUNGLE || b === BIOME.PINEFOREST) surface = 'leaves';
+      const dry = b === BIOME.DESERT || b === BIOME.CANYON || b === BIOME.BEACH || b === BIOME.VOLCANIC || b === BIOME.SNOW ? 1.6 : 1;
+      const wet = 1 - g.weather.local.rain * 0.7;
+      const k = Math.min(2.2, 0.25 + mass * 0.45) * (0.5 + fast * 0.8) * dry * wet;
+      if (k > 0.12) g.fx.dust(pos, k, tint);
+    }
+    // sub-bass thud and ground shake for the big ones
+    if (size > 5 && dist < 110) {
+      g.audio.play('footfall', { pos, ref: 4 + mass * 6, mass, surface, vol: Math.min(1, 0.4 + fast * 0.6) });
+      if (size > 9) {
+        const k = Math.max(0, 1 - dist / (25 + size * 3.5));
+        if (k > 0) g.cam.shake(Math.min(0.3, k * k * (size - 8) * 0.04 * (0.6 + fast)));
+      }
+    }
+  }
+
   _fpUpdate() {}
 
   nearestTrack(pos, r) {

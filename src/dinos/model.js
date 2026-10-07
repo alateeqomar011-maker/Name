@@ -1,6 +1,7 @@
 // Procedural, skinned dinosaur models. Each species is generated from anatomical parameters:
 // a swept body along a spine curve, jointed legs/arms, and species features (horns, frills, sails, plates...).
 import * as THREE from 'three';
+import { atmospherePatch, TRANSLUCENCY } from '../world/atmosphere.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLSL_NOISE, U } from '../world/shaderlib.js';
 
@@ -954,6 +955,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
         }`);
   };
   m.customProgramCacheKey = () => 'dinoskin-v2';
+  { const _obc = m.onBeforeCompile; m.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n if (vMat > 1.5 && vMat < 2.5) { vec3 tSunV = normalize((viewMatrix * vec4(uSunDirA, 0.0)).xyz); reflectedLight.directDiffuse += diffuseColor.rgb * aSunDirect * pow(max(dot(normalize(-vViewPosition), tSunV), 0.0), 2.0) * 0.9; }'); }; }
   return m;
 }
 
