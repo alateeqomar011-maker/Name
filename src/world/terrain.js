@@ -97,13 +97,15 @@ export function createTerrainMaterial(world) {
           float warp = vnoise(p.xz * 0.02) * 2.5 + triN(p * 0.09, w) * 0.8;
           // sedimentary ledges: sawtooth layers give stepped, eroded strata
           float layer = fract(p.y * 0.28 + warp);
-          float ledge = pow(layer, 2.5) * 0.55;
-          float thin = (sin(p.y * 2.2 + warp * 6.0) * 0.5 + 0.5) * 0.12 * fine;
+          // strata only read on steep faces; on gentle slopes they would draw contour loops
+          float steep = 1.0 - w.y;
+          float ledge = pow(layer, 2.5) * 0.55 * steep;
+          float thin = (sin(p.y * 2.2 + warp * 6.0) * 0.5 + 0.5) * 0.12 * fine * steep;
           // angular fractured plates
           float plate = floor(triN(p * 0.22, w) * 5.0) / 5.0;
           float big = triN(p * 0.05, w);
           float crack = 1.0 - abs(triN(p * 0.33, w) * 2.0 - 1.0);
-          crack = smoothstep(0.94, 0.995, crack) * 0.3 * smoothstep(0.42, 0.7, triN(p * 0.06 + 3.0, w));
+          crack = smoothstep(0.94, 0.995, crack) * 0.3 * smoothstep(0.42, 0.7, triN(p * 0.06 + 3.0, w)) * (0.25 + 0.75 * steep);
           float grain = (triN(p * 3.1, w) - 0.5) * 0.18 * fine;
           return ledge + thin + plate * 0.35 + big * 0.45 - crack + grain;
         }`)
@@ -145,6 +147,11 @@ export function createTerrainMaterial(world) {
           float algae = surf2.g * smoothstep(0.55, 0.75, fbm3(vWPos.xz * 0.35 + 4.0)) * smoothstep(0.8, 0.95, vWNormal.y);
           diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.06, 0.09, 0.025), algae * 0.6);
         }
+        // footprint-aware anti-aliasing: fade fine features once a cell spans less than ~2 pixels
+        float pxFoot = length(fwidth(vWPos.xz));
+        float aaFine = 1.0 - smoothstep(0.06, 0.12, pxFoot);
+        float aaMid = 1.0 - smoothstep(0.15, 0.32, pxFoot);
+        fineFade *= aaFine;
         if (closeFade > 0.0) {
           vec2 gp = vWPos.xz;
           float flatK = smoothstep(0.7, 0.9, vWNormal.y);
@@ -177,7 +184,7 @@ export function createTerrainMaterial(world) {
             float rad = 0.26 + 0.2 * fract(pv.z * 13.1);
             float dome = present * sqrt(max(0.0, 1.0 - (pv.x / rad) * (pv.x / rad)));
             vec3 pv2 = voro(gp * 1.5 + 3.3 + sw * 0.25);
-            float present2 = step(pv2.z, 0.06 + 0.22 * surf.b);
+            float present2 = step(pv2.z, 0.06 + 0.22 * surf.b) * aaMid;
             float rad2 = 0.2 + 0.18 * fract(pv2.z * 7.3);
             float dome2 = present2 * sqrt(max(0.0, 1.0 - (pv2.x / rad2) * (pv2.x / rad2)));
             float stone = max(dome, dome2);
@@ -218,7 +225,7 @@ export function createTerrainMaterial(world) {
             diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.64, 0.56), lk * closeFade * (0.45 + 0.25 * (1.0 - L.x)));
             diffuseColor.rgb *= mix(1.0, 0.88 + 0.24 * vnoise(gp * 7.0), lk * closeFade * (1.0 - fineFade));
             diffuseColor.rgb = mix(diffuseColor.rgb, lc, cov * 0.92);
-            float tw = twigs(gp * 1.25) * lk * closeFade;
+            float tw = twigs(gp * 1.25) * lk * closeFade * aaMid;
             diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.06, 0.04, 0.025) * (0.8 + 0.4 * vnoise(gp * 25.0)), tw * 0.9);
             gH += (L.x * L.y * 0.35 + tw * 0.8) * lk;
             gRough = mix(gRough < 0.0 ? 0.92 : gRough, 0.8, cov);
@@ -256,14 +263,14 @@ export function createTerrainMaterial(world) {
         snowAmt = max(snowAmt, uSnow * 0.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.96), snowAmt);
         float flatG = smoothstep(0.86, 0.975, ny);
-        float puddle = max(uWet, swampMud * 0.85) * flatG * smoothstep(0.56 - swampMud * 0.1, 0.7 - swampMud * 0.1, fbm3(vWPos.xz * 0.085)) * step(0.6, vWPos.y) * (1.0 - snowAmt);
+        float puddle = max(uWet, swampMud * 0.6) * flatG * smoothstep(0.58, 0.7, fbm3(vWPos.xz * 0.085)) * step(0.6, vWPos.y) * (1.0 - snowAmt);
         float wet = max(uWet * (0.55 + 0.45 * flatG), swampMud * 0.8) * (1.0 - snowAmt);
         diffuseColor.rgb *= mix(1.0, 0.55, wet);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.5 + vec3(0.01, 0.012, 0.015), puddle);
       `)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         if (gRough >= 0.0) roughnessFactor = mix(roughnessFactor, gRough, closeFade * (1.0 - rockAmt));
-        roughnessFactor = mix(roughnessFactor, 0.4, wet);
+        roughnessFactor = mix(roughnessFactor, 0.4 + swampMud * 0.42, wet);
         roughnessFactor = mix(roughnessFactor, 0.03, puddle);
         roughnessFactor = mix(roughnessFactor, 0.6, snowAmt);
         roughnessFactor = mix(roughnessFactor, 0.78 - crackR * 0.1, rockAmt);`)
@@ -298,7 +305,7 @@ export function createTerrainMaterial(world) {
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v7';
+  mat.customProgramCacheKey = () => 'terrain-v8';
   { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); }; }
   return mat;
 }

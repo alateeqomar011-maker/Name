@@ -4,16 +4,17 @@ import { mulberry32, Simplex } from '../core/noise.js';
 import { addWind } from './shaderlib.js';
 
 const TILE = 256;
-export const TILES = { BROAD: 0, JUNGLE: 1, CONIFER: 2, FERN: 3, PALM: 4, MOSS: 5, TUFT: 6, BERRY: 7 };
+export const TILES = { BROAD: 0, JUNGLE: 1, CONIFER: 2, FERN: 3, PALM: 4, MOSS: 5, TUFT: 6, BERRY: 7, SPRAY: 8, BROAD2: 9, TWIG: 10, NEEDLE: 11 };
+const ROWS = 3;
 
 function tileUV(t) {
   const tx = t % 4, ty = Math.floor(t / 4);
-  return { u0: tx / 4, u1: (tx + 1) / 4, v0: 1 - (ty + 1) / 2, v1: 1 - ty / 2 };
+  return { u0: tx / 4, u1: (tx + 1) / 4, v0: 1 - (ty + 1) / ROWS, v1: 1 - ty / ROWS };
 }
 
 function makeLeafAtlas() {
   const cv = document.createElement('canvas');
-  cv.width = TILE * 4; cv.height = TILE * 2;
+  cv.width = TILE * 4; cv.height = TILE * ROWS;
   const ctx = cv.getContext('2d');
   const rand = mulberry32(42);
   const R = (a, b) => a + (b - a) * rand();
@@ -169,6 +170,91 @@ function makeLeafAtlas() {
       }
     }
   }
+  // 8: conifer spray, vertical with the base at the bottom: a woody axis, side branchlets and
+  // dense needles, darker inside, fresh pale-green growth at the tips
+  {
+    const [ox, oy] = origin(8);
+    ctx.lineCap = 'round';
+    const needles = (x0, y0, x1, y1, nl, dens) => {
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      const steps = Math.floor(len / dens);
+      const ang0 = Math.atan2(y1 - y0, x1 - x0);
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps;
+        const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+        const l = nl * (1 - t * 0.45);
+        const tipK = Math.max(0, (t - 0.7) / 0.3);
+        for (const side of [-1, 1]) {
+          const a = ang0 + side * R(0.55, 1.05);
+          ctx.strokeStyle = `hsl(${R(118, 138) - tipK * 30},${R(30, 48) + tipK * 15}%,${R(13, 24) + tipK * 18}%)`;
+          ctx.lineWidth = R(1.1, 2.0);
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); ctx.stroke();
+        }
+      }
+    };
+    const cx = ox + 128;
+    // main axis
+    ctx.strokeStyle = 'hsl(28,30%,20%)'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx, oy + 254); ctx.lineTo(cx, oy + 6); ctx.stroke();
+    for (let k = 0; k < 9; k++) {
+      const t = 0.1 + k * 0.095;
+      const y = oy + 254 - t * 248;
+      const reach = Math.sin(Math.min(1, t * 1.25) * Math.PI) * 92 * (1 - t * 0.3) + 14;
+      for (const side of [-1, 1]) {
+        const x1 = cx + side * reach, y1 = y - reach * R(0.45, 0.7);
+        ctx.strokeStyle = 'hsl(28,28%,22%)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(x1, y1); ctx.stroke();
+        needles(cx, y, x1, y1, R(11, 15), 2.0);
+      }
+    }
+    needles(cx, oy + 254, cx, oy + 6, 15, 1.8);
+  }
+  // 9: dense broadleaf cluster, smaller overlapping leaves with sunlit rims
+  {
+    const [ox, oy] = origin(9);
+    for (let i = 0; i < 230; i++) {
+      const a = R(0, Math.PI * 2), r = Math.pow(rand(), 0.6) * 104;
+      const x = ox + 128 + Math.cos(a) * r, y = oy + 128 + Math.sin(a) * r * 0.9;
+      const edge = r / 104;
+      const light = R(18, 34) + edge * 14;
+      leaf(x, y, R(14, 24), R(5, 8.5), a + R(-1.1, 1.1), `hsl(${R(82, 108)},${R(35, 55)}%,${light}%)`, `hsla(85,30%,${light + 10}%,0.5)`);
+    }
+  }
+  // 10: leafy twig spray (vertical, base at bottom) used to break up canopy silhouettes
+  {
+    const [ox, oy] = origin(10);
+    const cx = ox + 128;
+    ctx.strokeStyle = 'hsl(28,30%,24%)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, oy + 254); ctx.quadraticCurveTo(cx + 10, oy + 130, cx - 4, oy + 10); ctx.stroke();
+    for (let k = 0; k < 16; k++) {
+      const t = 0.12 + k * 0.055;
+      const y = oy + 254 - t * 244;
+      const side = k % 2 ? 1 : -1;
+      const l = R(36, 70) * (1 - t * 0.35);
+      const ex = cx + side * l, ey = y - l * 0.5;
+      ctx.strokeStyle = 'hsl(30,28%,26%)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(ex, ey); ctx.stroke();
+      for (let q = 0; q < 5; q++) {
+        const u = 0.3 + q * 0.17;
+        const lx = cx + (ex - cx) * u, ly = y + (ey - y) * u;
+        const light = R(20, 40);
+        leaf(lx, ly, R(18, 28), R(6, 10), Math.atan2(ey - y, ex - cx) + R(-0.9, 0.9), `hsl(${R(85, 110)},${R(38, 56)}%,${light}%)`, `hsla(85,30%,${light + 12}%,0.55)`);
+      }
+    }
+  }
+  // 11: fine needle clump (pine top / young growth)
+  {
+    const [ox, oy] = origin(11);
+    for (let i = 0; i < 520; i++) {
+      const a = R(-Math.PI * 0.95, -Math.PI * 0.05), r0 = R(0, 18), r1 = R(50, 120);
+      ctx.strokeStyle = `hsl(${R(105, 135)},${R(32, 50)}%,${R(14, 32)}%)`;
+      ctx.lineWidth = R(1.2, 2.4);
+      ctx.beginPath();
+      ctx.moveTo(ox + 128 + Math.cos(a) * r0, oy + 250 + Math.sin(a) * r0);
+      ctx.lineTo(ox + 128 + Math.cos(a) * r1, oy + 250 + Math.sin(a) * r1 * 1.9);
+      ctx.stroke();
+    }
+  }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -178,30 +264,52 @@ function makeLeafAtlas() {
 }
 
 function makeBark() {
+  // furrowed bark: vertical ridges split by deep dark fissures, broken into plates by short
+  // horizontal cracks, with pale lichen and green moss blotches
+  const W = 256, H = 512;
   const cv = document.createElement('canvas');
-  cv.width = 128; cv.height = 256;
+  cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
   const rand = mulberry32(7);
-  ctx.fillStyle = '#6b5a48'; ctx.fillRect(0, 0, 128, 256);
-  for (let i = 0; i < 260; i++) {
-    const x = rand() * 128, w = 1 + rand() * 4;
-    const l = 30 + rand() * 120, y = rand() * 256;
-    const v = Math.floor(60 + rand() * 70);
-    ctx.fillStyle = `rgba(${v},${v * 0.85},${v * 0.7},0.55)`;
-    ctx.fillRect(x, y, w, l);
-    if (y + l > 256) ctx.fillRect(x, y - 256, w, l);
+  const R = (a, b) => a + (b - a) * rand();
+  ctx.fillStyle = '#6e5c4a'; ctx.fillRect(0, 0, W, H);
+  // ridge plates
+  for (let i = 0; i < 520; i++) {
+    const x = rand() * W, w = R(4, 14), l = R(30, 110), y = rand() * H;
+    const v = Math.floor(R(78, 132));
+    ctx.fillStyle = `rgba(${v},${Math.floor(v * 0.86)},${Math.floor(v * 0.72)},0.5)`;
+    for (const dy of [0, -H, H]) ctx.fillRect(x, y + dy, w, l);
   }
-  for (let i = 0; i < 60; i++) {
-    ctx.strokeStyle = 'rgba(30,22,16,0.7)'; ctx.lineWidth = 1 + rand() * 2;
-    const x = rand() * 128;
-    ctx.beginPath(); ctx.moveTo(x, rand() * 256);
-    ctx.lineTo(x + (rand() - 0.5) * 8, rand() * 256); ctx.stroke();
+  // fissures
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 34; i++) {
+    let x = rand() * W;
+    ctx.strokeStyle = `rgba(${R(18, 30)},${R(13, 20)},${R(9, 14)},${R(0.75, 0.95)})`;
+    ctx.lineWidth = R(2, 5.5);
+    ctx.beginPath(); ctx.moveTo(x, -10);
+    for (let y = 0; y <= H + 10; y += 16) { x += R(-4, 4); ctx.lineTo(x, y); }
+    ctx.stroke();
+  }
+  // horizontal plate cracks
+  for (let i = 0; i < 150; i++) {
+    const x = rand() * W, y = rand() * H, l = R(5, 16);
+    ctx.strokeStyle = 'rgba(25,18,12,0.7)'; ctx.lineWidth = R(1, 2.2);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + l, y + R(-2, 2)); ctx.stroke();
+  }
+  // lichen and moss
+  for (let i = 0; i < 70; i++) {
+    const x = rand() * W, y = rand() * H, r = R(3, 12);
+    const moss = rand() < 0.4;
+    ctx.fillStyle = moss ? `rgba(${R(70, 95)},${R(95, 120)},${R(40, 55)},0.45)` : `rgba(${R(160, 190)},${R(170, 190)},${R(150, 165)},0.35)`;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * R(0.6, 1.4), R(0, 3), 0, Math.PI * 2); ctx.fill();
   }
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 4;
-  return tex;
+  const bump = new THREE.CanvasTexture(cv);
+  bump.wrapS = bump.wrapT = THREE.RepeatWrapping;
+  return { tex, bump };
 }
 
 // ---------- Geometry builder ----------
@@ -237,6 +345,39 @@ export class GeoBuilder {
     }
   }
 
+  // Continuous curved tube through several points (parallel-transported frame, slightly irregular section)
+  tubePath(pts, rads, seg, col, sways, vScale = 1, uRep = 1) {
+    const n = pts.length;
+    const base = this.count;
+    let prevU = null, acc = 0;
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      const t = (i < n - 1 ? pts[i + 1].clone().sub(p) : p.clone().sub(pts[i - 1])).normalize();
+      if (i > 0 && i < n - 1) t.add(p.clone().sub(pts[i - 1]).normalize()).normalize();
+      let u;
+      if (!prevU) {
+        const tmp = Math.abs(t.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0);
+        u = new THREE.Vector3().crossVectors(t, tmp).normalize();
+      } else u = prevU.clone().sub(t.clone().multiplyScalar(prevU.dot(t))).normalize();
+      prevU = u;
+      const w = new THREE.Vector3().crossVectors(t, u).normalize();
+      if (i > 0) acc += p.distanceTo(pts[i - 1]);
+      for (let k = 0; k <= seg; k++) {
+        const a = (k / seg) * Math.PI * 2;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        const nx = u.x * ca + w.x * sa, ny = u.y * ca + w.y * sa, nz = u.z * ca + w.z * sa;
+        const r = rads[i] * (1 + 0.07 * Math.sin(a * 3 + i * 1.7));
+        this.vert(p.x + nx * r, p.y + ny * r, p.z + nz * r, nx, ny, nz, (k / seg) * uRep, acc * vScale, col, sways[i]);
+      }
+    }
+    for (let i = 0; i < n - 1; i++) {
+      for (let k = 0; k < seg; k++) {
+        const a = base + i * (seg + 1) + k, b = a + 1, c = a + seg + 1, d = c + 1;
+        this.tri(a, c, b); this.tri(b, c, d);
+      }
+    }
+  }
+
   // Leaf card. center, U = half-extent vector across, V = half-extent vector along tile's vertical
   card(center, U, V, tile, col, sway, normCenter, swayV = null) {
     const t = tileUV(tile);
@@ -268,7 +409,7 @@ export class GeoBuilder {
   }
 
   // Curved frond strip; texture tile is vertical with base at the bottom
-  frond(base, dir, len, width, droop, tile, col, sway0, sway1, segs = 6, twist = 0) {
+  frond(base, dir, len, width, droop, tile, col, sway0, sway1, segs = 6, twist = 0, roll = 0) {
     const t = tileUV(tile);
     const d = dir.clone().normalize();
     const side = new THREE.Vector3().crossVectors(d, new THREE.Vector3(0, 1, 0));
@@ -279,7 +420,7 @@ export class GeoBuilder {
       const s = i / segs;
       const P = base.clone().addScaledVector(d, len * s);
       P.y -= droop * len * s * s;
-      const tw = twist * s;
+      const tw = roll + twist * s;
       const sd = side.clone().applyAxisAngle(d, tw);
       const w = width * (0.35 + 0.65 * Math.sin(Math.min(1, s * 1.1 + 0.08) * Math.PI));
       const tang = new THREE.Vector3().copy(d).setY(d.y - 2 * droop * s);
@@ -317,53 +458,109 @@ const lin = (r, g, b) => [Math.pow(r, 2.2), Math.pow(g, 2.2), Math.pow(b, 2.2)];
 function conifer(seed) {
   const rand = mulberry32(seed);
   const trunk = new GeoBuilder(), leaves = new GeoBuilder();
-  const H = 17 + rand() * 4;
-  trunk.cylinder(V3(0, -0.6, 0), V3(0, H, 0), 0.5, 0.06, 7, lin(0.75, 0.62, 0.5), 0, 0.5, 0.25, 2);
-  const tiers = 13;
+  const H = 17 + rand() * 5;
+  const lx = (rand() - 0.5) * 0.7, lz = (rand() - 0.5) * 0.7;
+  const bark = lin(0.72, 0.6, 0.5);
+  const trunkAt = (y) => { const t = Math.max(0, (y + 0.8) / (H + 0.8)); return V3(lx * t * t + Math.sin(t * 5 + seed) * 0.08, y, lz * t * t + Math.cos(t * 4 + seed) * 0.08); };
+  // trunk with a flared, rooted base
+  const tp = [], tr = [], ts = [];
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    const y = -0.8 + t * (H + 0.8);
+    tp.push(trunkAt(y));
+    tr.push((0.5 * (1 - t * 0.93) + 0.035) * (t < 0.12 ? 1 + (0.12 - t) * 5 : 1));
+    ts.push(t * 0.5);
+  }
+  trunk.tubePath(tp, tr, 8, bark, ts, 0.22, 2);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + rand();
+    trunk.tubePath([V3(Math.cos(a) * 0.3, 0.6, Math.sin(a) * 0.3), V3(Math.cos(a) * 0.9, -0.05, Math.sin(a) * 0.9), V3(Math.cos(a) * 1.5, -0.35, Math.sin(a) * 1.5)], [0.2, 0.13, 0.05], 5, bark, [0, 0, 0], 0.22, 1);
+  }
+  // dead, bare lower twigs
+  for (let i = 0; i < 9; i++) {
+    const y = 1.8 + rand() * H * 0.22;
+    const a = rand() * Math.PI * 2;
+    const c = trunkAt(y);
+    const d = V3(Math.cos(a), -0.15 + rand() * 0.3, Math.sin(a)).normalize();
+    trunk.cylinder(c, c.clone().addScaledVector(d, 0.7 + rand() * 1.5), 0.045, 0.012, 3, lin(0.48, 0.42, 0.36), 0.1, 0.3, 0.25);
+  }
+  // living tiers of drooping needle sprays; lower tiers sit in their own shade
+  const tiers = 16;
+  const crownBase = H * (0.27 + rand() * 0.08);
   for (let t = 0; t < tiers; t++) {
-    const s = t / tiers;
-    const y = 3 + s * (H - 3.5);
-    const len = (1 - s) * 4.8 + 0.8;
-    const n = 7;
-    const off = rand() * Math.PI;
+    const s = t / (tiers - 1);
+    const y = crownBase + s * (H - crownBase - 0.8) + (rand() - 0.5) * 0.4;
+    const c = trunkAt(y);
+    const len = (1 - s) * 4.7 * (0.85 + rand() * 0.3) + 0.9;
+    const n = s > 0.8 ? 4 : 6;
+    const off = rand() * Math.PI * 2;
+    const shade = 0.55 + 0.45 * s;
     for (let i = 0; i < n; i++) {
-      const a = off + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.4;
-      const d = V3(Math.cos(a), -0.25 - s * 0.1, Math.sin(a)).normalize();
-      const center = V3(0, y, 0).addScaledVector(d, len * 0.5);
-      const U = d.clone().multiplyScalar(len * 0.55);
-      const side = V3(-Math.sin(a), 0.35, Math.cos(a)).normalize().multiplyScalar(len * 0.42);
-      const g = 0.75 + rand() * 0.25;
-      leaves.card(center, U, side, TILES.CONIFER, [g, g, g], 0.15 + s * 0.6, V3(0, y + 1, 0), null);
+      const a = off + (i / n) * Math.PI * 2 + (rand() - 0.5) * 0.5;
+      const d = V3(Math.cos(a), 0.14 - s * 0.06 + (rand() - 0.5) * 0.16, Math.sin(a));
+      const g = shade * (0.85 + rand() * 0.25);
+      leaves.frond(c, d, len, len * 0.42, 0.22 + (1 - s) * 0.26, TILES.SPRAY, [g, g * 1.02, g * 0.95], 0.12 + s * 0.5, 0.45 + s * 0.5, 3, (rand() - 0.5) * 0.8, (rand() - 0.5) * 1.1);
     }
   }
-  // tip
-  leaves.card(V3(0, H + 0.3, 0), V3(0.7, 0, 0), V3(0, 1.0, 0), TILES.TUFT, [1, 1, 1], 0.8, V3(0, H, 0));
+  // leader
+  const top = trunkAt(H);
+  const lb = top.clone().add(V3(0, -1.7, 0));
+  leaves.frond(lb, V3(0.04, 1, 0), 2.3, 0.6, 0, TILES.SPRAY, [1.05, 1.05, 1], 0.6, 0.9, 2, 0, 0);
+  leaves.frond(lb, V3(-0.04, 1, 0.02), 2.3, 0.6, 0, TILES.SPRAY, [1, 1, 1], 0.6, 0.9, 2, 0, Math.PI / 2);
   return { trunk: trunk.build(), leaves: leaves.build(), radius: 0.5, height: H };
 }
 
 function oak(seed) {
   const rand = mulberry32(seed);
   const trunk = new GeoBuilder(), leaves = new GeoBuilder();
-  const H = 6 + rand() * 2;
-  const bark = lin(0.8, 0.72, 0.62);
-  trunk.cylinder(V3(0, -0.6, 0), V3(0, H, 0), 0.75, 0.45, 9, bark, 0, 0.1, 0.25, 2);
-  const tips = [V3(0, H + 4.5, 0)];
-  const nb = 5;
+  const bark = lin(0.78, 0.7, 0.6);
+  const H = 4.5 + rand() * 2;
+  const lx = (rand() - 0.5) * 1.1, lz = (rand() - 0.5) * 1.1;
+  const tp = [], tr = [], ts = [];
+  for (let i = 0; i <= 5; i++) {
+    const t = i / 5;
+    tp.push(V3(lx * t * t, -0.6 + t * (H + 0.6), lz * t * t));
+    tr.push((0.62 - t * 0.2) * (t < 0.15 ? 1 + (0.15 - t) * 4 : 1));
+    ts.push(t * 0.08);
+  }
+  trunk.tubePath(tp, tr, 9, bark, ts, 0.22, 2);
+  const top = tp[tp.length - 1];
+  const tips = [];
+  // recursive, gently curving limbs
+  const grow = (p, d, len, r, depth, sway) => {
+    const mid = p.clone().addScaledVector(d, len * 0.5).add(V3((rand() - 0.5) * len * 0.15, len * 0.06, (rand() - 0.5) * len * 0.15));
+    const nd = d.clone(); nd.y += 0.15; nd.normalize();
+    const e = mid.clone().addScaledVector(nd, len * 0.5);
+    trunk.tubePath([p, mid, e], [r, r * 0.8, r * 0.6], depth > 0 ? 6 : 4, bark, [sway, sway + 0.1, sway + 0.2], 0.22, 1);
+    if (depth > 0) {
+      const k = 2 + (rand() < 0.5 ? 1 : 0);
+      for (let i = 0; i < k; i++) {
+        const a = (i / k) * Math.PI * 2 + rand();
+        const dd = nd.clone().setY(nd.y * 0.5).add(V3(Math.cos(a) * 0.8, 0.05 + rand() * 0.25, Math.sin(a) * 0.8)).normalize();
+        grow(e, dd, len * (0.6 + rand() * 0.15), r * 0.6, depth - 1, sway + 0.2);
+      }
+    } else tips.push(e);
+  };
+  const nb = 4 + Math.floor(rand() * 2);
   for (let i = 0; i < nb; i++) {
-    const a = (i / nb) * Math.PI * 2 + rand() * 0.6;
-    const y0 = H - 1.5 + rand() * 1.5;
-    const tip = V3(Math.cos(a) * (3.5 + rand() * 2), y0 + 2.5 + rand() * 2.5, Math.sin(a) * (3.5 + rand() * 2));
-    trunk.cylinder(V3(0, y0, 0), tip, 0.38, 0.12, 6, bark, 0.1, 0.4, 0.25);
-    tips.push(tip);
+    const a = (i / nb) * Math.PI * 2 + rand() * 0.7;
+    const d = V3(Math.cos(a), 0.28 + rand() * 0.3, Math.sin(a)).normalize();
+    grow(top.clone().add(V3(0, -rand() * 1.2, 0)), d, 4.0 + rand() * 1.6, 0.32, 1, 0.08);
   }
+  const center = top.clone().add(V3(0, 2.6, 0));
+  let maxY = 0;
   for (const tip of tips) {
-    leaves.cluster(tip.clone().add(V3(0, 0.8, 0)), 3.0 + rand() * 0.8, 9, TILES.BROAD, [1, 1, 1], 0.6, rand);
+    const c = tip.clone().add(V3(0, 0.5, 0));
+    maxY = Math.max(maxY, c.y + 2);
+    leaves.cluster(c, 2.5 + rand() * 0.7, 10, rand() < 0.5 ? TILES.BROAD : TILES.BROAD2, [1, 1, 1], 0.6, rand);
+    for (let k = 0; k < 2; k++) {
+      const od = c.clone().sub(center).setY(0).normalize().add(V3((rand() - 0.5) * 0.6, -0.2 + rand() * 0.5, (rand() - 0.5) * 0.6)).normalize();
+      leaves.frond(c, od, 1.8 + rand() * 0.8, 0.9, 0.35, TILES.TWIG, [0.95, 1, 0.95], 0.6, 0.95, 2, 0, rand() * 3);
+    }
   }
-  for (let i = 0; i < 8; i++) {
-    const a = rand() * Math.PI * 2, r = 2 + rand() * 3;
-    leaves.cluster(V3(Math.cos(a) * r, H + 2 + rand() * 3.5, Math.sin(a) * r), 2.6, 6, TILES.BROAD, [0.9, 0.95, 0.9], 0.7, rand);
-  }
-  return { trunk: trunk.build(), leaves: leaves.build(), radius: 0.75, height: H + 7 };
+  // shaded interior fill so the crown never looks hollow
+  for (let i = 0; i < 6; i++) leaves.cluster(center.clone().add(V3((rand() - 0.5) * 6, (rand() - 0.5) * 2, (rand() - 0.5) * 6)), 2.8, 6, TILES.BROAD2, [0.6, 0.65, 0.6], 0.5, rand);
+  return { trunk: trunk.build(), leaves: leaves.build(), radius: 0.62, height: maxY };
 }
 
 function kapok(seed) {
@@ -377,13 +574,15 @@ function kapok(seed) {
     const a = (i / 6) * Math.PI * 2 + rand() * 0.3;
     trunk.cylinder(V3(Math.cos(a) * 3.2, -0.8, Math.sin(a) * 3.2), V3(Math.cos(a) * 0.5, 4.5, Math.sin(a) * 0.5), 0.35, 0.25, 5, bark, 0, 0, 0.2);
   }
-  // branches + umbrella canopy
+  // curving limbs + umbrella canopy
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2 + rand() * 0.5;
     const r = 6 + rand() * 4;
     const tip = V3(Math.cos(a) * r, H + 2 + rand() * 2, Math.sin(a) * r);
-    trunk.cylinder(V3(0, H - 2, 0), tip, 0.5, 0.2, 6, bark, 0.05, 0.3, 0.2);
-    leaves.cluster(tip.clone().add(V3(0, 1, 0)), 4.2, 9, TILES.JUNGLE, [1, 1, 1], 0.4, rand);
+    const mid = V3(Math.cos(a) * r * 0.45, H + 1.6 + rand(), Math.sin(a) * r * 0.45);
+    trunk.tubePath([V3(0, H - 2, 0), mid, tip], [0.55, 0.36, 0.18], 6, bark, [0.05, 0.18, 0.3], 0.2, 1);
+    leaves.cluster(tip.clone().add(V3(0, 1, 0)), 4.2, 10, rand() < 0.6 ? TILES.JUNGLE : TILES.BROAD2, [1, 1, 1], 0.4, rand);
+    leaves.frond(tip.clone().add(V3(0, 0.6, 0)), V3(Math.cos(a), -0.3, Math.sin(a)), 2.6, 1.2, 0.4, TILES.TWIG, [0.9, 1, 0.9], 0.4, 0.8, 2, 0, rand() * 3);
     // vines
     const vb = tip.clone().add(V3(0, -0.5, 0));
     leaves.card(vb.clone().add(V3(0, -4, 0)), V3(1.2, 0, 0), V3(0, 4, 0), TILES.MOSS, [0.75, 0.9, 0.7], 0.5, vb, [0.9, 0.3]);
@@ -437,13 +636,17 @@ function cypress(seed) {
   const bark = lin(0.66, 0.6, 0.52);
   trunk.cylinder(V3(0, -1, 0), V3(0, 2.5, 0), 1.6, 0.6, 9, bark, 0, 0, 0.25, 2);
   trunk.cylinder(V3(0, 2.5, 0), V3(0, H, 0), 0.6, 0.2, 8, bark, 0, 0.3, 0.25, 2);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < 13; i++) {
     const a = rand() * Math.PI * 2;
-    const y = H * (0.45 + rand() * 0.55);
-    const r = 1.5 + rand() * 3.2;
+    const y = H * (0.42 + rand() * 0.58);
+    const r = 1.5 + rand() * 3.4;
     const c = V3(Math.cos(a) * r, y, Math.sin(a) * r);
-    trunk.cylinder(V3(0, y - 1.5, 0), c, 0.22, 0.08, 5, bark, 0.1, 0.4, 0.25);
-    leaves.cluster(c, 2.4, 6, TILES.CONIFER, [0.8, 0.85, 0.65], 0.55, rand);
+    trunk.tubePath([V3(0, y - 1.5, 0), V3(c.x * 0.5, y - 0.4, c.z * 0.5), c], [0.22, 0.15, 0.08], 5, bark, [0.1, 0.25, 0.4], 0.25, 1);
+    for (let k = 0; k < 7; k++) {
+      const fa = (k / 7) * Math.PI * 2 + rand();
+      const g = 0.75 + rand() * 0.2;
+      leaves.frond(c, V3(Math.cos(fa), 0.2 + rand() * 0.35, Math.sin(fa)), 2.6 + rand() * 0.8, 1.15, 0.45, TILES.SPRAY, [g * 0.95, g, g * 0.75], 0.5, 0.8, 3, 0, (rand() - 0.5) * 1.2);
+    }
     leaves.card(c.clone().add(V3(0, -2.2, 0)), V3(0.9, 0, 0.3), V3(0, 2.2, 0), TILES.MOSS, [0.85, 0.85, 0.7], 0.6, c, [0.9, 0.4]);
   }
   return { trunk: trunk.build(), leaves: leaves.build(), radius: 0.9, height: H + 2 };
@@ -584,12 +787,13 @@ export function rockGeometry(seed, detail = 3, squash = 0.7, ore = false) {
 export class FloraLibrary {
   constructor() {
     this.atlas = makeLeafAtlas();
-    this.bark = makeBark();
+    const bark = makeBark();
+    this.bark = bark.tex;
     this.leafMat = addWind(new THREE.MeshStandardMaterial({
       map: this.atlas, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82, metalness: 0,
     }), 1.0, true);
     this.leafMat.alphaToCoverage = true;
-    this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, vertexColors: true, roughness: 0.95 }), 0.6);
+    this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, bumpMap: bark.bump, bumpScale: 2.5, vertexColors: true, roughness: 0.95 }), 0.6);
     this.rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
     this.oreMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 });
     this.types = {

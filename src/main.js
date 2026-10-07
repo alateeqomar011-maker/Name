@@ -315,6 +315,7 @@ class Game extends Emitter {
     }
     this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows);
     if (this.bloom) this.bloom.enabled = this.quality.bloom;
+    if (this.waterPass) this.waterPass.ao = !!this.quality.bloom;
     this.audio.setVolume(S.volume);
     this.audio.setMusicVolume(S.music);
     this.input.sensitivity = S.sens;

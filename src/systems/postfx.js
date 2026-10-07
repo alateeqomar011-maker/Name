@@ -53,11 +53,12 @@ const shader = {
           vec2 gp = uSun + axis * offs[i];
           vec2 d = (vUv - gp) * vec2(uAspect, 1.0);
           float r = length(d) / sizes[i];
-          ghosts += tints[i] * smoothstep(1.0, 0.75, r) * (0.35 + 0.65 * smoothstep(0.4, 1.0, r)) * 0.045;
+          // faint, mostly-rim ghosts like real coated lens elements
+          ghosts += tints[i] * smoothstep(1.0, 0.8, r) * (0.15 + 0.85 * smoothstep(0.6, 1.0, r)) * 0.016;
         }
         // soft halo ring
         vec2 hd = (vUv - vec2(0.5)) * vec2(uAspect, 1.0);
-        float ring = exp(-pow((length(hd) - 0.42) * 22.0, 2.0)) * 0.025;
+        float ring = exp(-pow((length(hd) - 0.42) * 22.0, 2.0)) * 0.012;
         float sunVis = (skyMask(uSun) + skyMask(uSun + vec2(0.01, 0.0)) + skyMask(uSun - vec2(0.01, 0.0)) + skyMask(uSun + vec2(0.0, 0.015)) + skyMask(uSun - vec2(0.0, 0.015))) / 5.0;
         col += (ghosts + ring * vec3(0.8, 0.9, 1.0)) * uSunColor * uFlare * sunVis;
       }
@@ -110,22 +111,125 @@ export const SSR_U = {
   uCamNear: { value: 0.15 }, uCamFar: { value: 9000 }, uSSR: { value: 0 },
 };
 
+// Scalable ambient obscurance reconstructed from the depth buffer alone (no extra scene render,
+// so it works with every custom vertex shader: grass, wind-swayed foliage, skinned dinosaurs).
+const AO_COMMON = /* glsl */ `
+  uniform sampler2D tDepth; uniform vec2 uRes; uniform float uNear; uniform float uFar; uniform vec2 uP;
+  varying vec2 vUv;
+  float vz(float d){ return (uNear * uFar) / ((uFar - uNear) * d - uFar); }
+  vec3 vpos(vec2 uv){ float z = vz(texture2D(tDepth, uv).r); return vec3((uv * 2.0 - 1.0) / uP * (-z), z); }
+`;
+const aoShader = {
+  uniforms: { tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNear: { value: 0.15 }, uFar: { value: 9000 }, uP: { value: new THREE.Vector2(1, 1) }, uRadius: { value: 1.1 }, uIntensity: { value: 1.0 } },
+  vertexShader: shader.vertexShader,
+  fragmentShader: AO_COMMON + /* glsl */ `
+    uniform float uRadius; uniform float uIntensity;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      float d = texture2D(tDepth, vUv).r;
+      if (d >= 0.99999) { gl_FragColor = vec4(1.0); return; }
+      vec3 P = vpos(vUv);
+      vec2 px = 1.0 / uRes;
+      vec3 pr = vpos(vUv + vec2(px.x, 0.0)), pl = vpos(vUv - vec2(px.x, 0.0));
+      vec3 pu = vpos(vUv + vec2(0.0, px.y)), pd = vpos(vUv - vec2(0.0, px.y));
+      vec3 dx = abs(pr.z - P.z) < abs(P.z - pl.z) ? pr - P : P - pl;
+      vec3 dy = abs(pu.z - P.z) < abs(P.z - pd.z) ? pu - P : P - pd;
+      vec3 N = normalize(cross(dx, dy));
+      float r = uRadius * (1.0 + smoothstep(20.0, 120.0, -P.z) * 2.0);
+      float sr = r * uP.y / (-P.z) * 0.5;
+      if (sr * uRes.y < 2.0) { gl_FragColor = vec4(1.0); return; }
+      sr = min(sr, 0.1);
+      float ang = h(vUv * uRes) * 6.2832;
+      float jit = h(vUv * uRes + 17.0);
+      float r2 = r * r;
+      float occ = 0.0;
+      const int S = 12;
+      for (int i = 0; i < S; i++) {
+        float t = (float(i) + jit) / float(S);
+        float a = ang + float(i) * 2.39996;
+        vec2 off = vec2(cos(a) * uRes.y / uRes.x, sin(a)) * sr * t;
+        vec3 v = vpos(vUv + off) - P;
+        float vv = dot(v, v);
+        float f = max(r2 - vv, 0.0);
+        occ += f * f * f * max((dot(v, N) - 0.002 * (-P.z)) / (vv + 0.01), 0.0);
+      }
+      float ao = max(0.0, 1.0 - occ * uIntensity * 5.0 / (r2 * r2 * r2 * float(S)));
+      gl_FragColor = vec4(vec3(ao), 1.0);
+    }`,
+};
+const aoBlurShader = {
+  uniforms: { tAO: { value: null }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) }, uNear: { value: 0.15 }, uFar: { value: 9000 }, uP: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: shader.vertexShader,
+  fragmentShader: AO_COMMON + /* glsl */ `
+    uniform sampler2D tAO;
+    void main(){
+      float zc = vz(texture2D(tDepth, vUv).r);
+      vec2 px = 1.0 / uRes;
+      float sum = 0.0, wsum = 0.0;
+      for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++) {
+        vec2 uv = vUv + vec2(float(i), float(j)) * px;
+        float z = vz(texture2D(tDepth, uv).r);
+        float w = exp(-abs(z - zc) / (0.02 * abs(zc) + 0.05)) * (1.0 - 0.1 * float(abs(i) + abs(j)));
+        sum += texture2D(tAO, uv).r * w; wsum += w;
+      }
+      gl_FragColor = vec4(vec3(sum / max(wsum, 1e-4)), 1.0);
+    }`,
+};
+
 export class WaterPass extends Pass {
   constructor(scene, camera) {
     super();
     this.scene = scene;
     this.camera = camera;
+    this.ao = true;
+    this.aoStrength = 0.85;
     this.copyMat = new THREE.ShaderMaterial({
-      uniforms: { tColor: { value: null }, tDepth: { value: null } },
+      uniforms: { tColor: { value: null }, tDepth: { value: null }, tAO: { value: null }, uAO: { value: 0 } },
       vertexShader: shader.vertexShader,
-      fragmentShader: `uniform sampler2D tColor; uniform sampler2D tDepth; varying vec2 vUv;
-        void main(){ gl_FragColor = texture2D(tColor, vUv); gl_FragDepth = texture2D(tDepth, vUv).r; }`,
+      fragmentShader: `uniform sampler2D tColor; uniform sampler2D tDepth; uniform sampler2D tAO; uniform float uAO; varying vec2 vUv;
+        void main(){
+          vec4 c = texture2D(tColor, vUv);
+          float d = texture2D(tDepth, vUv).r;
+          if (uAO > 0.0 && d < 0.99999) c.rgb *= mix(1.0, texture2D(tAO, vUv).r, uAO);
+          gl_FragColor = c; gl_FragDepth = d;
+        }`,
       depthTest: true, depthWrite: true, depthFunc: THREE.AlwaysDepth,
     });
     this.fsQuad = new FullScreenQuad(this.copyMat);
+    const rtOpts = { type: THREE.UnsignedByteType, depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter };
+    this.aoRT = new THREE.WebGLRenderTarget(2, 2, rtOpts);
+    this.aoRT2 = new THREE.WebGLRenderTarget(2, 2, rtOpts);
+    this.aoMat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(aoShader.uniforms), vertexShader: aoShader.vertexShader, fragmentShader: aoShader.fragmentShader, depthTest: false, depthWrite: false });
+    this.blurMat = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(aoBlurShader.uniforms), vertexShader: aoBlurShader.vertexShader, fragmentShader: aoBlurShader.fragmentShader, depthTest: false, depthWrite: false });
+    this.aoQuad = new FullScreenQuad(this.aoMat);
+    this.blurQuad = new FullScreenQuad(this.blurMat);
+  }
+  setSize(w, h) {
+    const hw = Math.max(1, Math.floor(w / 2)), hh = Math.max(1, Math.floor(h / 2));
+    this.aoRT.setSize(hw, hh);
+    this.aoRT2.setSize(hw, hh);
+  }
+  _ao(renderer, readBuffer) {
+    const cam = this.camera;
+    const pe = cam.projectionMatrix.elements;
+    for (const m of [this.aoMat, this.blurMat]) {
+      const u = m.uniforms;
+      u.tDepth.value = readBuffer.depthTexture;
+      u.uRes.value.set(this.aoRT.width, this.aoRT.height);
+      u.uNear.value = cam.near; u.uFar.value = cam.far;
+      u.uP.value.set(pe[0], pe[5]);
+    }
+    renderer.setRenderTarget(this.aoRT);
+    this.aoQuad.render(renderer);
+    this.blurMat.uniforms.tAO.value = this.aoRT.texture;
+    renderer.setRenderTarget(this.aoRT2);
+    this.blurQuad.render(renderer);
   }
   render(renderer, writeBuffer, readBuffer) {
     const cam = this.camera;
+    if (this.ao) this._ao(renderer, readBuffer);
+    this.copyMat.uniforms.tAO.value = this.aoRT2.texture;
+    this.copyMat.uniforms.uAO.value = this.ao ? this.aoStrength : 0;
     SSR_U.tSceneColor.value = readBuffer.texture;
     SSR_U.tSceneDepth.value = readBuffer.depthTexture;
     SSR_U.uResolution.value.set(readBuffer.width, readBuffer.height);
@@ -150,5 +254,5 @@ export class WaterPass extends Pass {
     renderer.autoClear = ac;
     renderer.shadowMap.autoUpdate = su;
   }
-  dispose() { this.copyMat.dispose(); this.fsQuad.dispose(); }
+  dispose() { this.copyMat.dispose(); this.fsQuad.dispose(); this.aoRT.dispose(); this.aoRT2.dispose(); this.aoMat.dispose(); this.blurMat.dispose(); this.aoQuad.dispose(); this.blurQuad.dispose(); }
 }
