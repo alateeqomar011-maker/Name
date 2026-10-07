@@ -425,6 +425,7 @@ class Game extends Emitter {
     this.photo.update(dt, I);
     this.build.update(dt, I);
     if (!this.build.active) this.interact.update(dt, I);
+    this.joystick.setTakeLabel(this.build.active ? null : this.interact.current);
     this.interact.updateProjectiles(dt);
     // tracker refresh
     if (this.tracking) { const h = this.tracking.herd; if (h.count <= 0) this.tracking = null; else { this.tracking.x = h.x; this.tracking.z = h.z; } }

@@ -52,6 +52,25 @@ export class Joystick {
       sb.classList.toggle('on', input.sprintToggle);
     });
     sb.addEventListener('click', (e) => e.stopPropagation());
+    // Take / use button: acts like holding the E key, so tap to pick up and hold to gather
+    const tb = (this.takeBtn = document.createElement('div'));
+    tb.id = 'takeBtn';
+    tb.innerHTML = '<span class="i">✋</span><span class="t">TAKE</span>';
+    document.body.appendChild(tb);
+    let tid = null;
+    const release = () => { tid = null; input.keys.delete('KeyE'); tb.classList.remove('on'); };
+    tb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      tid = e.pointerId;
+      tb.setPointerCapture(e.pointerId);
+      if (!input.keys.has('KeyE')) input.pressed.add('KeyE');
+      input.keys.add('KeyE');
+      tb.classList.add('on');
+    });
+    tb.addEventListener('pointerup', (e) => { if (e.pointerId === tid) release(); });
+    tb.addEventListener('pointercancel', release);
+    tb.addEventListener('click', (e) => e.stopPropagation());
     // Touch look: drag anywhere else on the game canvas to turn the camera
     const canvas = input.canvas;
     let look = null;
@@ -67,9 +86,17 @@ export class Joystick {
     canvas.addEventListener('pointerup', stopLook);
     canvas.addEventListener('pointercancel', stopLook);
   }
+  // Show what the take button will do right now
+  setTakeLabel(cur) {
+    const t = this.takeBtn.querySelector('.t');
+    const label = !cur || cur.disabled || cur.key === 'F' ? 'TAKE' : cur.hold ? 'HOLD' : 'TAKE';
+    if (t.textContent !== label) t.textContent = label;
+    this.takeBtn.classList.toggle('ready', !!cur && !cur.disabled && cur.key !== 'F');
+  }
   setVisible(v) {
     this.el.style.display = v ? '' : 'none';
     this.sprintBtn.style.display = v ? '' : 'none';
+    this.takeBtn.style.display = v ? '' : 'none';
     this.sprintBtn.classList.toggle('on', !!this.input.sprintToggle);
   }
 }
