@@ -10,9 +10,9 @@ export class Joystick {
     this.knob = el.querySelector('.knob');
     this.ring = el.querySelector('.ring');
     this.pid = null;
-    const R = 50;
     const move = (e) => {
       const r = this.ring.getBoundingClientRect();
+      const R = Math.max(24, r.width * 0.36); // knob travel scales with the on-screen ring
       let x = e.clientX - (r.left + r.width / 2), y = e.clientY - (r.top + r.height / 2);
       const l = Math.hypot(x, y);
       if (l > R) { x = (x / l) * R; y = (y / l) * R; }

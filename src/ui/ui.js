@@ -624,7 +624,9 @@ export class UI {
   _initMap() {
     const cv = $('#mapcv');
     const r = cv.getBoundingClientRect();
-    cv.width = r.width; cv.height = r.height;
+    // canvas pixels follow the element's own (unscaled) CSS size; k converts screen px to it
+    cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+    const k = cv.clientWidth / Math.max(1, r.width);
     const ms = this.mapState;
     const P = this.game.player.pos;
     if (!ms.init) { ms.cx = P.x; ms.cz = P.z; ms.zoom = 1.2; ms.init = true; }
@@ -634,7 +636,7 @@ export class UI {
     this._drawMap = () => this._renderMap(cv, toScreen, view);
     cv.onwheel = (e) => { e.preventDefault(); const [wx, wz] = toWorld(e.offsetX, e.offsetY); ms.zoom = Math.min(12, Math.max(0.6, ms.zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2))); const [nx, nz] = toWorld(e.offsetX, e.offsetY); ms.cx += wx - nx; ms.cz += wz - nz; this._drawMap(); };
     cv.onmousedown = (e) => { ms.drag = { x: e.clientX, y: e.clientY, cx: ms.cx, cz: ms.cz, moved: false }; };
-    cv.onmousemove = (e) => { if (!ms.drag) return; const { s } = view(); const dx = e.clientX - ms.drag.x, dy = e.clientY - ms.drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) ms.drag.moved = true; ms.cx = ms.drag.cx - dx / s; ms.cz = ms.drag.cz - dy / s; this._drawMap(); };
+    cv.onmousemove = (e) => { if (!ms.drag) return; const { s } = view(); const dx = (e.clientX - ms.drag.x) * k, dy = (e.clientY - ms.drag.y) * k; if (Math.abs(dx) + Math.abs(dy) > 4) ms.drag.moved = true; ms.cx = ms.drag.cx - dx / s; ms.cz = ms.drag.cz - dy / s; this._drawMap(); };
     cv.onmouseup = (e) => { if (ms.drag && !ms.drag.moved) { const [x, z] = toWorld(e.offsetX, e.offsetY); this.game.journal.waypoint = { x, z }; this.notify('Waypoint set.', 'info', 1.5); this.renderMenu(); } ms.drag = null; };
     this._drawMap();
   }
