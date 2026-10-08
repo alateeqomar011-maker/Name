@@ -131,8 +131,10 @@ export function createTerrainMaterial(world, quality) {
           float gSplit = smoothstep(0.3, 0.7, vnoise(gp * 0.021 + 9.0) * 0.7 + vnoise(gp * 0.09) * 0.3);
           w[4] = grav * (1.0 - sDes) * (1.0 - sVolc * 0.5) * (0.35 + 0.65 * gSplit);
           w[5] = grav * sDes + grav * (1.0 - sDes) * (1.0 - sVolc) * (1.0 - gSplit) * 0.65;
-          w[6] = sSand * (1.0 - sDes);
-          w[7] = sSand * sDes;
+          // beaches: fine sand broken by broad patches of wind ripples; deserts are all dunes
+          float rip = smoothstep(0.35, 0.65, vnoise(gp * 0.03 + 21.0) * 0.75 + vnoise(gp * 0.11) * 0.25);
+          w[6] = sSand * (1.0 - sDes) * (1.0 - rip * 0.7);
+          w[7] = sSand * sDes + sSand * (1.0 - sDes) * rip * 0.7;
           w[8] = sDry * (1.0 - sVolc);
           w[9] = sVolc * (0.9 + sDry * 0.3);
           float others = 0.0;
