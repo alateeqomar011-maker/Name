@@ -560,8 +560,9 @@ class Game extends Emitter {
     const baseExp = (inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5) * (1 - U.uWinter.value * 0.2);
     // eye adaptation: measured scene luminance gently opens up in shade and stops down in glare
     if (this.godRays && this.godRays.enabled) {
-      const key = 0.16 / Math.max(0.02, this.godRays.avgLum);
-      const target = Math.min(1.45, Math.max(0.78, Math.pow(key, 0.45)));
+      // calibrated so an open sunlit meadow sits at 1.0; nights may only open up a little
+      const key = 0.4 / Math.max(0.02, this.godRays.avgLum);
+      const target = Math.min(1 + 0.45 * this.sky.dayFactor, Math.max(0.78, Math.pow(key, 0.5)));
       this._adapt = (this._adapt || 1) + (target - (this._adapt || 1)) * (1 - Math.exp(-dt * 1.2));
     } else this._adapt = 1;
     this.renderer.toneMappingExposure = baseExp * this._adapt;

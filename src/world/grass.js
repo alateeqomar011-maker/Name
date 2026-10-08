@@ -91,7 +91,10 @@ export class Grass {
           p = vec3(p.x * ca - p.z * sa, p.y, p.x * sa + p.z * ca) * scl;
           float t = uv.y;
           float ph = uTime * (1.6 + uWind) + wp.x * 0.21 + wp.y * 0.17;
-          float gust = 0.6 + 0.4 * sin(uTime * 0.5 + wp.x * 0.03 + wp.y * 0.02);
+          // gust fronts travel downwind across the meadow in visible waves
+          float wPh = dot(wp, uWindDir) * 0.055 - uTime * (1.1 + uWind * 1.6) + vnoise(wp * 0.01) * 4.0;
+          float wave = pow(0.5 + 0.5 * sin(wPh), 3.0);
+          float gust = 0.35 + wave * (0.75 + uWind * 0.9);
           float bend = t * t * (0.12 + uWind * 0.45) * scl;
           p.x += (uWindDir.x * gust + 0.3 * sin(ph)) * bend;
           p.z += (uWindDir.y * gust + 0.3 * cos(ph * 1.2)) * bend;
@@ -120,6 +123,8 @@ export class Grass {
           base = mix(base, vec3(0.12, 0.1, 0.065), uWinter * 0.65);
           vec3 tipC = base * vec3(1.08, 1.22, 0.9) + vec3(0.02, 0.026, 0.004);
           vGrassCol = mix(base * 0.5, tipC, t) * (0.85 + 0.3 * vnoise(wp * 0.08));
+          // bent blades flash their paler undersides as a gust passes
+          vGrassCol *= 1.0 + wave * t * 0.22 * min(1.0, uWind + 0.3);
           vGrassCol = mix(vGrassCol, vec3(0.66, 0.69, 0.74), max(uSnow, uWinter * 0.55) * 0.6 * t);
           vTip = t;
         `);
@@ -128,7 +133,7 @@ export class Grass {
           varying vec3 vGrassCol; varying float vTip;`)
         .replace('#include <color_fragment>', `diffuseColor.rgb = vGrassCol;`);
     };
-    mat.customProgramCacheKey = () => 'grass-v4';
+    mat.customProgramCacheKey = () => 'grass-v5';
     { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.6, 0.35)); }; }
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;

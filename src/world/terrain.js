@@ -21,6 +21,7 @@ export function createTerrainMaterial(world) {
     shader.uniforms.uWindDir = U.uWindDir;
     shader.uniforms.uWinter = U.uWinter;
     shader.uniforms.uAutumn = U.uAutumn;
+    shader.uniforms.uRain = U.uRain;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; varying vec3 vWNormal;')
       .replace('#include <project_vertex>', `#include <project_vertex>
@@ -30,7 +31,7 @@ export function createTerrainMaterial(world) {
       .replace('#include <common>', `#include <common>
         varying vec3 vWPos; varying vec3 vWNormal;
         uniform float uWet; uniform float uSnow; uniform float uTime; uniform float uSnowLine;
-        uniform sampler2D uSurfTex; uniform sampler2D uSurfTex2; uniform vec2 uWindDir; uniform float uWinter; uniform float uAutumn;
+        uniform sampler2D uSurfTex; uniform sampler2D uSurfTex2; uniform vec2 uWindDir; uniform float uWinter; uniform float uAutumn; uniform float uRain;
         ${GLSL_NOISE}
         ${GLSL_MEADOW}
         vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
@@ -342,10 +343,22 @@ export function createTerrainMaterial(world) {
             if (abs(det) > 1e-12 && dot(nB, nB) > 0.5) nW = nB;
           }
           nW = normalize(mix(nW, vec3(0.0, 1.0, 0.0), puddle * 0.9));
+          // raindrops ringing in the puddles
+          if (puddle > 0.05 && uRain > 0.02 && camD < 40.0) {
+            for (int k = 0; k < 2; k++) {
+              vec2 rp = vWPos.xz * 1.7 + float(k) * 0.5;
+              vec2 cell = floor(rp); vec2 f = fract(rp) - 0.5;
+              float hh = hash12(cell + float(k) * 13.0);
+              float tt = fract(uTime * 0.8 + hh);
+              float rr = length(f) - tt * 0.45;
+              float ring = exp(-rr * rr * 500.0) * (1.0 - tt) * step(hh, uRain);
+              nW = normalize(nW + vec3(f.x, 0.0, f.y) * ring * 2.5 * puddle);
+            }
+          }
           normal = normalize((viewMatrix * vec4(nW, 0.0)).xyz);
         }`);
   };
-  mat.customProgramCacheKey = () => 'terrain-v11';
+  mat.customProgramCacheKey = () => 'terrain-v12';
   { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); }; }
   return mat;
 }

@@ -229,6 +229,18 @@ export class Weather {
     pu.uColor.value.setRGB(snowing ? 0.95 : dusty ? 0.75 : 0.65, snowing ? 0.95 : dusty ? 0.55 : 0.7, snowing ? 1 : dusty ? 0.35 : 0.78).multiplyScalar(0.4 + g.sky.dayFactor * 0.6);
     pu.uOpacity.value = snowing ? 0.8 : dusty ? 0.5 : 0.28;
     this.precip.visible = amt > 0.01;
+    // splashes bouncing off the ground around the camera
+    if (!inCave && L.rain > 0.08 && L.snow < L.rain) {
+      this._splashAcc = (this._splashAcc || 0) + dt * L.rain * 140;
+      const w = g.world;
+      while (this._splashAcc > 1) {
+        this._splashAcc -= 1;
+        const x = cam.x + (Math.random() - 0.5) * 24, z = cam.z + (Math.random() - 0.5) * 24;
+        const h = w.getHeight(x, z), wl = w.waterLevelAt(x, z);
+        if (wl > h) continue;
+        g.fx._p(g.fx.alpha, { x, y: h + 0.03, z, vx: (Math.random() - 0.5) * 0.6, vy: 0.9 + Math.random() * 0.8, vz: (Math.random() - 0.5) * 0.6, life: 0.22, r: 0.75, g: 0.8, b: 0.86, a: 0.5, s0: 0.05, s1: 0.11, grav: 9 });
+      }
+    }
     // lightning
     this.flash = Math.max(0, this.flash - dt * 6);
     this.boltMat.opacity = Math.max(0, this.boltMat.opacity - dt * 4);

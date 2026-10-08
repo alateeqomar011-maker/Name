@@ -72,7 +72,7 @@ const windMain = (strength) => `
             wd = transpose(im) * wd / max(dot(im[0], im[0]), 0.0001);
           #endif
           float ph = uTime * (1.3 + uWind * 0.9) + ip.x * 0.11 + ip.z * 0.13;
-          float gust = 0.55 + 0.45 * sin(uTime * 0.37 + ip.x * 0.01);
+          float gust = 0.45 + 0.75 * pow(0.5 + 0.5 * sin(dot(ip.xz, uWindDir) * 0.035 - uTime * (0.9 + uWind * 1.2)), 2.0);
           float sw = aSway * (0.25 + uWind) * ${strength.toFixed(2)};
           transformed.x += sw * (wd.x * (0.6 + 0.4*sin(ph)) * gust + 0.18 * sin(ph * 2.7 + position.y * 1.3));
           transformed.z += sw * (wd.z * (0.6 + 0.4*sin(ph*0.9)) * gust + 0.18 * cos(ph * 2.3 + position.x * 1.7));
