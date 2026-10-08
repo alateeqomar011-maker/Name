@@ -47,6 +47,20 @@ function finishPart(geo, color, mat, skinFn) {
   return geo;
 }
 
+// Eyeball whose vertex colours encode coordinates around its gaze axis (r = cos angle from the axis,
+// g/b = vertical/horizontal offsets), so the skin shader can paint iris, pupil and limbal ring.
+function eyePart(c, r, axis, bone) {
+  const A = axis.clone().normalize();
+  const Up = v3(0, 1, 0).sub(A.clone().multiplyScalar(A.y)).normalize();
+  const Sd = new THREE.Vector3().crossVectors(A, Up).normalize();
+  const g = ellipsoid(c, r, r, r, 18, 14);
+  const n = new THREE.Vector3();
+  return finishPart(g, (x, y, z) => {
+    n.set(x - c.x, y - c.y, z - c.z).normalize();
+    return [n.dot(A) * 0.5 + 0.5, n.dot(Up) * 0.5 + 0.5, n.dot(Sd) * 0.5 + 0.5];
+  }, 3, rigid(bone));
+}
+
 function rigid(bone) {
   return (x, y, z, o) => { o.i[0] = bone; o.i[1] = 0; o.i[2] = 0; o.i[3] = 0; o.w[0] = 1; o.w[1] = 0; o.w[2] = 0; o.w[3] = 0; };
 }
@@ -375,7 +389,9 @@ function buildWalker(spec) {
     const hr = headR(0.2);
     const er = Math.max(0.015, P.headR * 0.13);
     for (const side of [-1, 1]) {
-      parts.push(finishPart(ellipsoid(headPt(P.headLen * 0.2, hr.rt * 0.42, side * hr.rw * 0.86), er, er, er, 8, 6), EYE, 3, rigid(head)));
+      const ec = headPt(P.headLen * 0.2, hr.rt * 0.42, side * hr.rw * 0.86);
+      const fwdK = spec.diet === 'carnivore' ? 0.55 : 0.3;
+      parts.push(eyePart(ec, er, v3(side, 0.18, 0).add(hd.clone().multiplyScalar(fwdK)), head));
     }
   }
 
@@ -750,7 +766,7 @@ function buildFlyer(spec) {
   parts.push(finishPart(ellipsoid(hp, 0.07 * s, 0.09 * s, 0.13 * s, 8, 6), [1, 1, 1], 0, rigid(head)));
   parts.push(finishPart(coneAlong(hp.clone().add(v3(0, 0.0, 0.08 * s)), beakDir, 0.7 * P.beak * s, 0.06 * s, 6), [0.75, 0.62, 0.42], 1, rigid(head)));
   parts.push(finishPart(coneAlong(hp.clone().add(v3(0, 0.02 * s, -0.04 * s)), v3(0, 0.5, -1).normalize(), P.crest * 0.7 * s, 0.05 * s, 5), [1, 1, 1], 2, rigid(head)));
-  for (const sd of [-1, 1]) parts.push(finishPart(ellipsoid(hp.clone().add(v3(sd * 0.06 * s, 0.03 * s, 0.03 * s)), 0.015 * s, 0.015 * s, 0.015 * s, 6, 5), EYE, 3, rigid(head)));
+  for (const sd of [-1, 1]) parts.push(eyePart(hp.clone().add(v3(sd * 0.06 * s, 0.03 * s, 0.03 * s)), 0.015 * s, v3(sd, 0.15, 0.4), head));
   // wings
   const wings = [];
   for (const sd of [-1, 1]) {
@@ -876,7 +892,7 @@ function buildMarine(spec) {
     const z = L * 0.32 + k * L * 0.018;
     for (const sd of [-1, 1]) parts.push(finishPart(coneAlong(v3(sd * R * 0.3 * (1 - k * 0.07), -R * 0.25, z), v3(0, -1, 0.2), R * 0.18, R * 0.05, 4), TOOTH, 1, rigid(head)));
   }
-  for (const sd of [-1, 1]) parts.push(finishPart(ellipsoid(v3(sd * R * 0.42, R * 0.2, L * 0.33), R * 0.07, R * 0.07, R * 0.07, 6, 5), EYE, 3, rigid(head)));
+  for (const sd of [-1, 1]) parts.push(eyePart(v3(sd * R * 0.42, R * 0.2, L * 0.33), R * 0.07, v3(sd, 0.2, 0.3), head));
   const geometry = mergeGeometries(parts, false);
   geometry.computeBoundingSphere();
   const sphere = geometry.boundingSphere.clone();
@@ -888,7 +904,7 @@ function buildMarine(spec) {
 // ---------- Skin material ----------
 const PATTERN_ID = { stripes: 0, spots: 1, blotch: 2, bands: 3, countershade: 4 };
 
-export function makeSkinMaterial(colors, morph = null, size = 10) {
+export function makeSkinMaterial(colors, morph = null, size = 10, predator = false) {
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.72, metalness: 0, side: THREE.DoubleSide });
   const lin = (c) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
   let base = lin(colors.base), belly = lin(colors.belly), pattern = lin(colors.pattern), display = lin(colors.display);
@@ -902,6 +918,8 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
     uPatType: { value: PATTERN_ID[colors.type] ?? 0 }, uPatScale: { value: colors.scale || 1 }, uHurt: { value: 0 },
     uSkinF: { value: 7 * Math.sqrt(12 / Math.max(0.8, size)) },
     uLowH: { value: Math.max(0.04, size * 0.05) },
+    uIris: { value: predator ? new THREE.Color(0.62, 0.36, 0.04) : new THREE.Color(0.2, 0.11, 0.04) },
+    uSlit: { value: predator ? 1 : 0 },
   };
   m.userData.uniforms = uni;
   m.onBeforeCompile = (shader) => {
@@ -916,9 +934,26 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
       .replace('#include <common>', `#include <common>
         varying vec3 vBind; varying vec3 vBindN; varying float vMat;
         uniform vec3 uBase; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uDisplay;
-        uniform int uPatType; uniform float uPatScale; uniform float uWet; uniform float uHurt; uniform float uSkinF; uniform float uLowH;
+        uniform int uPatType; uniform float uPatScale; uniform float uWet; uniform float uHurt; uniform float uSkinF; uniform float uLowH; uniform vec3 uIris; uniform float uSlit;
         ${GLSL_NOISE}
-        float tri3(vec3 p){ return (vnoise(p.zy) + vnoise(p.xz + 7.1) + vnoise(p.xy + 3.7)) / 3.0; }`)
+        float tri3(vec3 p){ return (vnoise(p.zy) + vnoise(p.xz + 7.1) + vnoise(p.xy + 3.7)) / 3.0; }
+        vec2 sh22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
+        // cellular scale edge distance (0 at the groove between two scales)
+        float scaleEdge(vec2 p){
+          vec2 n = floor(p), f = fract(p);
+          float d1 = 8.0, d2 = 8.0;
+          for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
+            vec2 g = vec2(float(i), float(j));
+            vec2 r = g + 0.15 + sh22(n + g) * 0.7 - f;
+            float d = dot(r, r);
+            if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+          }
+          return sqrt(d2) - sqrt(d1);
+        }
+        float scales3(vec3 p, vec3 nrm){
+          vec3 w = pow(abs(nrm), vec3(4.0)); w /= (w.x + w.y + w.z);
+          return scaleEdge(p.zy) * w.x + scaleEdge(p.xz + 3.1) * w.y + scaleEdge(p.xy + 7.7) * w.z;
+        }`)
       .replace('#include <color_fragment>', `
         vec3 col;
         float top = smoothstep(-0.45, 0.3, vBindN.y);
@@ -926,6 +961,10 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
         float aa1 = 1.0 - smoothstep(0.25, 0.6, pxF);
         float aa2 = 1.0 - smoothstep(0.25, 0.6, pxF * 2.7);
         float scaleN = 0.5 + (tri3(vBind * uSkinF) - 0.5) * 0.65 * aa1 + (tri3(vBind * uSkinF * 2.7) - 0.5) * 0.35 * aa2;
+        // individual scales: larger and pebbled along the back, finer on the belly
+        float scF = uSkinF * mix(2.6, 1.8, smoothstep(-0.3, 0.6, vBindN.y));
+        float aaS = 1.0 - smoothstep(0.1, 0.26, pxF * scF / uSkinF);
+        float scE = vMat < 0.5 && aaS > 0.0 ? scales3(vBind * scF, vBindN) : 0.5;
         if (vMat < 0.5) {
           col = mix(uBelly, uBase, top);
           float s = uPatScale;
@@ -954,6 +993,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           }
           col = mix(col, uPattern, pat * (uPatType == 0 ? 0.92 : 0.85));
           col *= 0.86 + 0.24 * scaleN;
+          col *= mix(1.0, 0.8 + 0.2 * smoothstep(0.0, 0.14, scE), aaS);
           // dried mud caked on the feet and lower legs, splashed up the belly
           float mudN = fbm3(vBind.xz * 3.0 + vBind.y * 2.0);
           float mud = smoothstep(uLowH * (0.9 + 0.6 * mudN), 0.0, vBind.y) * 0.85;
@@ -965,7 +1005,22 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           col *= 0.88 + 0.24 * fbm3(vBind.zy * 0.9 + vBind.x * 0.5);
           // darker dorsal ridge
           col *= mix(1.0, 0.82, smoothstep(0.85, 0.98, vBindN.y));
-        } else if (vMat < 1.5 || vMat > 2.5) {
+        } else if (vMat > 2.5) {
+          // living eye: wet sclera, fibrous iris, dark limbal ring and a slit or round pupil
+          float ca = vColor.r * 2.0 - 1.0;
+          float ey = vColor.g * 2.0 - 1.0, ex = vColor.b * 2.0 - 1.0;
+          float rr = sqrt(max(0.0, 1.0 - ca * ca)) * step(0.0, ca) + step(ca, 0.0) * 2.0;
+          float ang = atan(ey, ex);
+          float fib = vnoise(vec2(ang * 9.0, rr * 14.0)) * 0.6 + vnoise(vec2(ang * 23.0, rr * 30.0)) * 0.4;
+          vec3 sclera = vec3(0.16, 0.1, 0.05);
+          vec3 irisC = uIris * (0.55 + 0.75 * fib) * mix(1.25, 0.7, smoothstep(0.1, 0.62, rr));
+          float irisM = 1.0 - smoothstep(0.6, 0.68, rr);
+          col = mix(sclera, irisC, irisM);
+          col *= 1.0 - smoothstep(0.48, 0.66, rr) * irisM * 0.7;
+          float slitW = 0.09 * sqrt(max(0.0, 1.0 - pow(ey / 0.55, 2.0)));
+          float pupil = mix(1.0 - smoothstep(0.16, 0.2, rr), 1.0 - smoothstep(slitW, slitW + 0.03, abs(ex)) * step(abs(ey), 0.55), uSlit);
+          col = mix(col, vec3(0.008, 0.006, 0.005), pupil * irisM);
+        } else if (vMat < 1.5) {
           col = vColor.rgb;
           col *= 0.9 + 0.15 * scaleN;
         } else {
@@ -976,7 +1031,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
         diffuseColor.rgb = col;
       `)
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
-        roughnessFactor = vMat > 2.5 ? 0.12 : (vMat > 0.5 && vMat < 1.5 ? 0.5 : roughnessFactor);
+        roughnessFactor = vMat > 2.5 ? 0.03 : (vMat > 0.5 && vMat < 1.5 ? 0.5 : roughnessFactor);
         roughnessFactor = mix(roughnessFactor, 0.35, uWet * 0.8);
         roughnessFactor *= 0.85 + 0.3 * scaleN;`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
@@ -986,6 +1041,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           // skin folds and wrinkles running around the body
           float fold = sin(vBind.z * uSkinF * 1.1 + vnoise(vBind.xy * uSkinF * 0.35) * 4.0);
           hb += pow(abs(fold), 6.0) * 0.6 * (1.0 - smoothstep(0.2, 0.5, pxB * 1.1));
+          hb += sqrt(smoothstep(0.0, 0.22, scE)) * 0.55 * aaS;
           float bumpK = 1.0;
           vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
           float dhx = dFdx(hb), dhy = dFdy(hb);
@@ -996,7 +1052,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10) {
           if (dot(nb, nb) > 1e-20) normal = normalize(nb);
         }`);
   };
-  m.customProgramCacheKey = () => 'dinoskin-v3';
+  m.customProgramCacheKey = () => 'dinoskin-v4';
   { const _obc = m.onBeforeCompile; m.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n if (vMat > 1.5 && vMat < 2.5) { vec3 tSunV = normalize((viewMatrix * vec4(uSunDirA, 0.0)).xyz); reflectedLight.directDiffuse += diffuseColor.rgb * aSunDirect * pow(max(dot(normalize(-vViewPosition), tSunV), 0.0), 2.0) * 0.9; }'); }; }
   return m;
 }

@@ -49,6 +49,7 @@ import { Seasons } from './systems/season.js';
 const SAVE_KEY = 'primeval-frontier-save-v1';
 const SETTINGS_KEY = 'primeval-frontier-settings';
 
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const QUALITY = {
   low: { pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
   medium: { pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
@@ -501,12 +502,14 @@ class Game extends Emitter {
     if (this.events.ashTint > 0.05) { wp.tint = new THREE.Color(0.45, 0.35, 0.3); wp.tintAmt = this.events.ashTint; wp.fogTint = wp.tint; wp.cloud = Math.max(wp.cloud, this.events.ashTint); }
     this.sky.update(dt, this.clock.hour, wp, P, inCave);
     this.sky.follow(this.camera.position);
-    updateAtmosphere(this.camera, this.sky.sunDir, this.sky.sun.color.clone().multiplyScalar(Math.min(1.4, this.sky.sun.intensity / 2.4)), inCave ? 0 : this.weather.local.cloud, this.sky.cloudOffset, inCave ? 0.6 : 1 + this.weather.local.fog * 0.15);
+    const mist = inCave ? 0 : this._mist(P);
+    updateAtmosphere(this.camera, this.sky.sunDir, this.sky.sun.color.clone().multiplyScalar(Math.min(1.4, this.sky.sun.intensity / 2.4)), inCave ? 0 : this.weather.local.cloud, this.sky.cloudOffset, inCave ? 0.6 : 1 + this.weather.local.fog * 0.15, mist, this._mistBase || 0);
     this.sky.updateEnvironment();
     if (!inCave) {
       this.terrain.update(P.x, P.z);
       this.veg.update(P.x, P.z, dt, this.clock.elapsed);
       this.grass.update(this.camera.position);
+      this.grass.setPushers(this._grassPushers(title));
       this.water.update(dt, this.camera.position, this.weather, this.sky.uniforms.uZenith.value);
     }
     // fog
@@ -550,6 +553,46 @@ class Game extends Emitter {
     G.uWarm.value = this.sky.dayFactor * (1 - this.weather.local.cloud);
     // snow throws back far more light: expose a touch lower in winter
     this.renderer.toneMappingExposure = (inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5) * (1 - U.uWinter.value * 0.2);
+  }
+
+  // dawn ground mist: pools in low ground, heavier in swamps/jungles, autumn and after rain; wind and sun burn it off
+  _mist(P) {
+    const h = this.clock.hour;
+    const dawn = smooth(4.3, 6.2, h) * (1 - smooth(7.6, 10.2, h));
+    const dusk = smooth(19.2, 21.5, h) * 0.35 + (h > 21.5 || h < 4.3 ? 0.3 : 0);
+    this._mistT = (this._mistT || 0) - 1;
+    if (this._mistT <= 0) {
+      this._mistT = 30;
+      const w = this.world;
+      let s = 0, n = 0;
+      for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; for (const r of [120, 300]) { s += Math.max(w.seaLevel, w.getHeight(P.x + Math.cos(a) * r, P.z + Math.sin(a) * r)); n++; } }
+      this._mistBase = s / n - 6;
+      const b = w.getBiome(P.x, P.z);
+      this._mistHum = { [BIOME.SWAMP]: 1.5, [BIOME.JUNGLE]: 1.15, [BIOME.FOREST]: 0.95, [BIOME.PINEFOREST]: 1.0, [BIOME.GRASSLAND]: 0.75, [BIOME.RIVER]: 1.2, [BIOME.MOUNTAIN]: 0.6, [BIOME.DESERT]: 0.1, [BIOME.CANYON]: 0.15, [BIOME.VOLCANIC]: 0.3 }[b] ?? 0.6;
+    }
+    const L = this.weather.local;
+    const season = 1 + U.uAutumn.value * 0.4 + U.uWinter.value * 0.25;
+    return Math.max(0, (dawn + dusk) * this._mistHum * season * (1 - Math.min(0.85, L.wind * 0.8)) + this.weather.wet * 0.25 * dawn) * 1.0;
+  }
+
+  _grassPushers(title) {
+    const out = this._pushList || (this._pushList = []);
+    out.length = 0;
+    const p = this.player;
+    if (!title) {
+      if (p.inVehicle) out.push({ x: p.inVehicle.pos.x, y: p.inVehicle.pos.y, z: p.inVehicle.pos.z, r: 2.6 });
+      else if (p.alive) out.push({ x: p.pos.x, y: p.pos.y, z: p.pos.z, r: p.crouch ? 0.9 : 0.75 });
+    }
+    const c = this.camera.position;
+    const near = [];
+    for (const d of this.dinos.active) {
+      if (d.flyer || d.marine || !d.alive) continue;
+      const dd = Math.hypot(d.pos.x - c.x, d.pos.z - c.z);
+      if (dd < 60) near.push([dd, d]);
+    }
+    near.sort((a, b) => a[0] - b[0]);
+    for (const [, d] of near) { if (out.length >= 8) break; out.push({ x: d.pos.x, y: d.pos.y, z: d.pos.z, r: Math.max(0.8, d.radius * 1.6) }); }
+    return out;
   }
 
   _audioEnv(dt) {

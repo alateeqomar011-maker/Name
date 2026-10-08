@@ -53,6 +53,7 @@ export class Grass {
       uGroundTex: { value: world.groundTex },
       uTileSize: { value: S },
       uCam: { value: new THREE.Vector2() },
+      uPush: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, -9999, 0, 0)) },
     };
     mat.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this.uniforms);
@@ -66,7 +67,7 @@ export class Grass {
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>
           attribute vec3 aOffset;
-          uniform sampler2D uGroundTex; uniform float uTileSize; uniform vec2 uCam;
+          uniform sampler2D uGroundTex; uniform float uTileSize; uniform vec2 uCam; uniform vec4 uPush[8];
           uniform float uTime; uniform float uWind; uniform vec2 uWindDir; uniform float uSnow; uniform float uAutumn; uniform float uWinter;
           varying vec3 vGrassCol; varying float vTip;
           ${GLSL_HEIGHT}
@@ -94,6 +95,18 @@ export class Grass {
           float bend = t * t * (0.12 + uWind * 0.45) * scl;
           p.x += (uWindDir.x * gust + 0.3 * sin(ph)) * bend;
           p.z += (uWindDir.y * gust + 0.3 * cos(ph * 1.2)) * bend;
+          // blades part and flatten around the player, vehicles and dinosaurs moving through them
+          for (int k = 0; k < 8; k++) {
+            vec4 q = uPush[k];
+            if (q.w <= 0.0 || abs(q.y - h) > 2.5) continue;
+            vec2 dv = wp - q.xz;
+            float dd = length(dv);
+            float infl = 1.0 - smoothstep(q.w * 0.3, q.w, dd);
+            if (infl <= 0.0) continue;
+            vec2 dirv = dv / max(dd, 0.001);
+            p.xz += dirv * infl * t * 0.75 * (0.5 + scl);
+            p.y *= 1.0 - infl * 0.6 * t;
+          }
           vec3 transformed = vec3(wp.x, h - 0.04, wp.y) + p;
           vec3 base = pow(g.rgb, vec3(2.2));
           // lush green patches mixed into dry grassland, per-clump hue variation
@@ -115,7 +128,7 @@ export class Grass {
           varying vec3 vGrassCol; varying float vTip;`)
         .replace('#include <color_fragment>', `diffuseColor.rgb = vGrassCol;`);
     };
-    mat.customProgramCacheKey = () => 'grass-v3';
+    mat.customProgramCacheKey = () => 'grass-v4';
     { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.6, 0.35)); }; }
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;
@@ -126,5 +139,14 @@ export class Grass {
 
   update(camPos) {
     this.uniforms.uCam.value.set(camPos.x, camPos.z);
+  }
+
+  // pushers: [{ x, y, z, r }], nearest first (up to 8)
+  setPushers(list) {
+    const U8 = this.uniforms.uPush.value;
+    for (let i = 0; i < 8; i++) {
+      const q = list[i];
+      if (q) U8[i].set(q.x, q.y, q.z, q.r); else U8[i].set(0, -9999, 0, 0);
+    }
   }
 }

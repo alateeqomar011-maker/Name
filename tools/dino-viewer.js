@@ -26,7 +26,7 @@ const rigs = [];
 let x = 0;
 for (const spec of list) {
   const t = buildTemplate(spec);
-  const rig = new DinoRig(t, makeSkinMaterial(spec.colors, null, spec.length));
+  const rig = new DinoRig(t, makeSkinMaterial(spec.colors, null, spec.length, spec.diet === 'carnivore' || spec.diet === 'piscivore'));
   const len = spec.length;
   rig.mesh.position.set(x + len / 2, spec.flyer ? 3 : spec.aquatic ? 1.5 : 0, 0);
   rig.mesh.rotation.y = Math.PI / 2;

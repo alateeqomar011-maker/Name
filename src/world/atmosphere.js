@@ -12,11 +12,22 @@ export const A = {
   uCloudOffA: { value: new THREE.Vector2() },
   uHazeA: { value: 1 },
   uFogBaseA: { value: 0 },
+  uMistA: { value: 0 }, // low-lying valley mist density
+  uMistBase: { value: 0 },
 };
 
 const PARS = /* glsl */ `
 uniform mat4 uInvView; uniform vec3 uSunDirA; uniform vec3 uSunColA; uniform float uCloudCoverA; uniform vec2 uCloudOffA;
-uniform float uHazeA; uniform float uFogBaseA;
+uniform float uHazeA; uniform float uFogBaseA; uniform float uMistA; uniform float uMistBase;
+// thin ground mist layer integrated along the view ray (falls off over ~20 m above its base)
+float aMist(vec3 wp, float dist){
+  if (uMistA < 0.001) return 0.0;
+  float mh = 0.05;
+  float m0 = clamp(cameraPosition.y - uMistBase, -10.0, 2000.0), m1 = clamp(wp.y - uMistBase, -10.0, 2000.0);
+  float mdh = m1 - m0;
+  float mInt = abs(mdh) > 0.3 ? (exp(-mh * m0) - exp(-mh * m1)) / (mh * mdh) : exp(-mh * m0);
+  return 1.0 - exp(-dist * uMistA * 0.01 * min(mInt, 1.65));
+}
 float aHash(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float aNoise(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); vec2 u = f*f*(3.0-2.0*f);
   return mix(mix(aHash(i), aHash(i+vec2(1,0)), u.x), mix(aHash(i+vec2(0,1)), aHash(i+vec2(1,1)), u.x), u.y); }
@@ -49,6 +60,8 @@ const FOG = /* glsl */ `
     float sunAmt = pow(max(dot(aDir, uSunDirA), 0.0), 7.0) * smoothstep(-0.05, 0.15, uSunDirA.y);
     vec3 aFogCol = mix(fogColor, uSunColA * 0.9 + fogColor * 0.35, sunAmt * 0.65);
     gl_FragColor.rgb = mix(gl_FragColor.rgb, aFogCol, clamp(aFog, 0.0, 1.0));
+    float aMi = aMist(aWP, aDist);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor * 1.06, uSunColA * 0.75 + fogColor * 0.45, sunAmt * 0.6), aMi);
   }
 #endif
 `;
@@ -97,7 +110,9 @@ export const TRANSLUCENCY = (strength = 0.6, wrap = 0.25) => /* glsl */ `
   }
 `;
 
-export function updateAtmosphere(camera, sunDir, sunColor, cloudCover, cloudOffset, haze = 1) {
+export function updateAtmosphere(camera, sunDir, sunColor, cloudCover, cloudOffset, haze = 1, mist = 0, mistBase = 0) {
+  A.uMistA.value = mist;
+  A.uMistBase.value = mistBase;
   A.uInvView.value.copy(camera.matrixWorld);
   A.uSunDirA.value.copy(sunDir);
   A.uSunColA.value.copy(sunColor);

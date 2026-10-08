@@ -14,7 +14,7 @@ function flapMaterial(color, speed, amp, wingFold = false) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = U.uTime;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aFlap; uniform float uTime;')
+      .replace('#include <common>', '#include <common>\nattribute float aFlap; uniform float uTime; varying float vFlap;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         {
           float ph = 0.0;
@@ -25,10 +25,15 @@ function flapMaterial(color, speed, amp, wingFold = false) {
           float ang = sin(uTime * ${speed.toFixed(1)} + ph * 13.0) * ${amp.toFixed(2)} * mix(0.15, 1.0, glide);
           transformed.y += abs(position.x) * sin(ang) * aFlap;
           transformed.x *= mix(1.0, cos(ang), aFlap);
+          vFlap = aFlap;
         }`);
+    // wings darken toward their tips and edges, like real lepidopteran and bird plumage
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vFlap;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb *= mix(1.0, 0.3, smoothstep(0.55, 1.0, vFlap));');
     atmospherePatch(shader);
   };
-  m.customProgramCacheKey = () => 'flap' + speed + amp + wingFold;
+  m.customProgramCacheKey = () => 'flap2' + speed + amp + wingFold;
   return m;
 }
 
@@ -213,8 +218,12 @@ export class AmbientLife {
       f.pos.addScaledVector(f.vel, dt);
       const gh = w.getHeight(f.pos.x, f.pos.z);
       f.pos.y = gh + 0.6 + Math.sin(f.t * 3.1 + i) * 0.45 + Math.abs(Math.sin(f.t * 0.7 + i)) * 0.8;
+      // shy of the camera: veer away instead of filling the lens
+      _p.subVectors(f.pos, cam);
+      const cd = _p.length();
+      if (cd < 3.5) { _p.multiplyScalar(1 / Math.max(cd, 0.01)); f.vel.addScaledVector(_p, dt * 14); f.pos.addScaledVector(_p, (3.5 - cd) * dt * 3); }
       _q.setFromEuler(_e.set(0, Math.atan2(f.vel.x, f.vel.z), 0));
-      _m.compose(f.pos, _q, _s.setScalar(1.3));
+      _m.compose(f.pos, _q, _s.setScalar(1.0));
       this.bflyMesh.setMatrixAt(i, _m);
     });
     this.bflyMesh.instanceMatrix.needsUpdate = true;

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { U, GLSL_NOISE, GLSL_HEIGHT } from './shaderlib.js';
 import { SSR_U, LAYER_WATER, LAYER_OVERLAY } from '../systems/postfx.js';
+import { A } from './atmosphere.js';
 
 const waterVert = /* glsl */ `
 uniform float uTime; uniform float uWaveAmp; uniform float uLevel; uniform vec3 uOrigin;
@@ -46,7 +47,7 @@ uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 
 uniform vec3 uFogColor; uniform float uFogDensity; uniform float uRain; uniform float uNight; uniform sampler2D uMaskTex;
 uniform float uFlash; uniform float uUnder;
 uniform sampler2D tSceneColor; uniform sampler2D tSceneDepth; uniform vec2 uResolution; uniform float uCamNear; uniform float uCamFar; uniform float uSSR;
-uniform mat4 projectionMatrix;
+uniform mat4 projectionMatrix; uniform float uMistA; uniform float uMistBase;
 varying vec3 vWPos; varying float vDepth; varying vec2 vFlowUV; varying float vSteep; varying vec3 vWaveN;
 ${GLSL_NOISE}
 ${GLSL_HEIGHT}
@@ -209,6 +210,14 @@ void main(){
   vec3 vdir = -V;
   float sunAmt = pow(max(dot(vdir, uSunDir), 0.0), 7.0) * smoothstep(-0.05, 0.15, uSunDir.y);
   col = mix(col, mix(uFogColor, uSunColor * 0.9 + uFogColor * 0.35, sunAmt * 0.65), clamp(fogF, 0.0, 1.0));
+  if (uMistA > 0.001 && uUnder < 0.5) {
+    float mh = 0.05;
+    float m0 = clamp(cameraPosition.y - uMistBase, -10.0, 2000.0), m1 = clamp(vWPos.y - uMistBase, -10.0, 2000.0);
+    float mdh = m1 - m0;
+    float mInt = abs(mdh) > 0.3 ? (exp(-mh * m0) - exp(-mh * m1)) / (mh * mdh) : exp(-mh * m0);
+    float mi = 1.0 - exp(-dist * uMistA * 0.01 * min(mInt, 1.65));
+    col = mix(col, mix(uFogColor * 1.06, uSunColor * 0.75 + uFogColor * 0.45, sunAmt * 0.6), mi);
+  }
   gl_FragColor = vec4(col, alpha);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -221,6 +230,7 @@ function makeWaterMaterial(world, ocean, extra) {
     uFlash: U.uFlash, uHeightTex: { value: world.heightTex }, uMaskTex: { value: world.maskTex },
     uWaveAmp: extra.waveAmp, uLevel: ocean ? extra.seaLevel : extra.riverOffset, uOrigin: extra.origin, uUnder: extra.under,
     ...SSR_U,
+    uMistA: A.uMistA, uMistBase: A.uMistBase,
   };
   return new THREE.ShaderMaterial({
     uniforms, vertexShader: waterVert, fragmentShader: waterFrag,

@@ -199,7 +199,7 @@ export class DinoManager {
       const colors = { ...h.spec.colors };
       const t = h.tint;
       colors.base = colors.base.map((c) => clamp(c * t, 0, 1));
-      const mat = makeSkinMaterial(colors, morph, h.spec.length);
+      const mat = makeSkinMaterial(colors, morph, h.spec.length, h.spec.diet === 'carnivore' || h.spec.diet === 'piscivore');
       const d = new Dino(this, h, h.spec, tpl, mat, x, z, morph);
       d.active = true;
       d.heading = Math.atan2(h.target.x - h.x, h.target.z - h.z) + (this.rand() - 0.5);
