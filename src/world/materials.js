@@ -163,6 +163,10 @@ export const TerrainTextures = {
   skinOK: { value: 0 },
   foliageMap: null, // drawn leaf/needle/frond atlas (tools/build_foliage.py), straight alpha
   foliageNormal: null,
+  // looping FFT ocean frames (slope xz + whitecaps) and the aerated foam pattern (tools/build_water.py)
+  waveArray: null,
+  foamMap: null,
+  waveOK: { value: 0 },
 };
 
 function imageTexture(img, srgb, aniso) {
@@ -218,6 +222,15 @@ export async function loadTerrainTextures(renderer, size = 1024, base = './') {
     TerrainTextures.foliageNormal = leafTex(fn, false);
   } catch (e) {
     console.warn('foliage atlas unavailable, using painted leaves', e);
+  }
+  try {
+    const [wn, wf] = await Promise.all([loadImage(base + 'textures/water_normal.jpg'), loadImage(base + 'textures/water_foam.jpg')]);
+    TerrainTextures.waveArray = makeArray(stripToArray(wn, 256), false, aniso);
+    TerrainTextures.foamMap = imageTexture(wf, false, aniso);
+    TerrainTextures.foamMap.repeat.set(1, 1);
+    TerrainTextures.waveOK.value = 1;
+  } catch (e) {
+    console.warn('ocean detail unavailable, using procedural ripples', e);
   }
   return TerrainTextures;
 }

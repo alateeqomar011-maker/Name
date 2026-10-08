@@ -120,7 +120,7 @@ export class World {
           let m = smoothstep(3, 12, H[k]);
           if (m > 0) {
             this.gen.riverQuery(-HALF + c * CELL, z, q);
-            if (q.dist < Infinity) m *= smoothstep(q.width * 0.5 + 30, q.width * 1.5 + 70, q.dist);
+            if (q.dist < Infinity) m *= smoothstep(q.width * 0.5 + 6, q.width * 0.5 + 34, q.dist);
           }
           keep[k] = m;
         }
@@ -475,7 +475,45 @@ export class World {
     return out;
   }
 
+  // Distance from every sea cell to the nearest dry land (chamfer transform, blurred so the surf
+  // crests that follow its contours curve smoothly); 0.5 m steps up to 127 m in an 8-bit texture
+  _buildShore() {
+    const H = this.heights, D = new Float32Array(N * N);
+    const BIG = 1e9;
+    for (let i = 0; i < N * N; i++) D[i] = H[i] >= 0 ? 0 : BIG;
+    const a = CELL, b = CELL * Math.SQRT2;
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const k = r * N + c; let v = D[k];
+      if (v === 0) continue;
+      if (c > 0) v = Math.min(v, D[k - 1] + a);
+      if (r > 0) { v = Math.min(v, D[k - N] + a); if (c > 0) v = Math.min(v, D[k - N - 1] + b); if (c < N - 1) v = Math.min(v, D[k - N + 1] + b); }
+      D[k] = v;
+    }
+    for (let r = N - 1; r >= 0; r--) for (let c = N - 1; c >= 0; c--) {
+      const k = r * N + c; let v = D[k];
+      if (v === 0) continue;
+      if (c < N - 1) v = Math.min(v, D[k + 1] + a);
+      if (r < N - 1) { v = Math.min(v, D[k + N] + a); if (c < N - 1) v = Math.min(v, D[k + N + 1] + b); if (c > 0) v = Math.min(v, D[k + N - 1] + b); }
+      D[k] = v;
+    }
+    const data = new Uint8Array(N * N);
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      let s = 0, w = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const rr = clamp(r + dr, 0, N - 1), cc = clamp(c + dc, 0, N - 1);
+        s += Math.min(D[rr * N + cc], 127.5); w++;
+      }
+      data[r * N + c] = Math.round((s / w) * 2);
+    }
+    this.shoreTex = new THREE.DataTexture(data, N, N, THREE.RedFormat, THREE.UnsignedByteType);
+    this.shoreTex.magFilter = THREE.LinearFilter;
+    this.shoreTex.minFilter = THREE.LinearFilter;
+    this.shoreTex.unpackAlignment = 1;
+    this.shoreTex.needsUpdate = true;
+  }
+
   _buildTextures() {
+    this._buildShore();
     // Height texture (float) used by grass and water shaders
     this.heightTex = new THREE.DataTexture(this.heights, N, N, THREE.RedFormat, THREE.FloatType);
     this.heightTex.magFilter = THREE.NearestFilter;
