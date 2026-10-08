@@ -109,7 +109,7 @@ export class CameraRig {
     let targetFov = this.baseFov;
     if (this.zoomFov) targetFov = this.zoomFov;
     else if (input.mouse.right && g.inventory.gear.has('binoculars') && !p.inVehicle && !g.ui.menuOpen && !g.build.active) targetFov = 14;
-    if (p.sprinting && !this.zoomFov) targetFov += 6;
+    if (p.sprinting && !this.zoomFov) targetFov += 12; // stronger speed sensation for the fast sprint
     if (V && V.speed > 15) targetFov += Math.min(12, (V.speed - 15) * 0.4);
     this.fov = lerp(this.fov, targetFov, 1 - Math.exp(-dt * 10));
     if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }

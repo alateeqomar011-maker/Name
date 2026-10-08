@@ -185,7 +185,7 @@ export class Player {
       // Land
       const n = w.getNormal(P.x, P.z, _n);
       const steep = n.y < 0.64;
-      let sp = this.crouch ? 2.0 : wantSprint ? 10.5 : 4.4;
+      let sp = this.crouch ? 2.0 : wantSprint ? 31.5 : 4.4;
       sp *= 1 + 0.03 * g.progress.skill('endurance');
       if (this.hunger <= 0 || this.thirst <= 0) sp *= 0.8;
       if (g.weather && g.weather.snowDepth(P) > 0) sp *= 0.85;
@@ -248,12 +248,18 @@ export class Player {
         this.vel.y -= GRAV * dt;
       }
 
+      // collisions with trees, rocks, structures; fast movement (the sprint covers a metre or
+      // more per frame) is split into short steps so it can't pass through a trunk
+      const hStep = Math.hypot(this.vel.x, this.vel.z) * dt;
       if (!this.climbing) {
-        P.x += this.vel.x * dt;
-        P.z += this.vel.z * dt;
+        const n = Math.min(8, Math.max(1, Math.ceil(hStep / 0.4)));
+        for (let i = 0; i < n; i++) {
+          P.x += this.vel.x * dt / n;
+          P.z += this.vel.z * dt / n;
+          if (n > 1 && i < n - 1) this._collide();
+        }
         P.y += this.vel.y * dt;
       }
-      // collisions with trees, rocks, structures
       this._collide();
       const h = Math.max(w.getHeight(P.x, P.z), g.build.platformAt(P.x, P.z, P.y));
       if (P.y <= h + 0.02) {
@@ -266,7 +272,7 @@ export class Player {
         P.y = h;
         if (this.vel.y < 0) this.vel.y = 0;
         this.onGround = true;
-      } else if (P.y > h + 0.35 || this.vel.y > 0) {
+      } else if (P.y > h + 0.35 + hStep * 0.6 || this.vel.y > 0) {
         if (this.onGround) this.fallStartY = P.y;
         this.onGround = false;
       } else {
