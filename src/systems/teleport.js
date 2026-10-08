@@ -224,8 +224,10 @@ registerLocation({
   find(g) {
     const w = g.world;
     const R = region('mirefen');
-    const s = search(g, { cx: R.x, cz: R.z, r: 380, seed: 71, tries: 4000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.9 && w.getVeg(x, z) < 0.35 && !!waterYaw(w, x, z, 30),
+    let s = search(g, { cx: R.x, cz: R.z, r: 380, seed: 71, tries: 4000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.9 && w.getVeg(x, z) < 0.35 && !!waterYaw(w, x, z, 30),
       score: (x, z) => (waterYaw(w, x, z, 30) || { n: 0 }).n - w.getVeg(x, z) * 10 });
+    // fallback: any open patch of marsh near standing water
+    if (!s) s = search(g, { cx: R.x, cz: R.z, r: 480, seed: 72, tries: 5000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.85 && w.getVeg(x, z) < 0.6, score: (x, z) => (waterYaw(w, x, z, 40) || { n: 0 }).n - w.getVeg(x, z) * 4 });
     if (!s) return null;
     const wy = waterYaw(w, s.x, s.z, 30);
     return { x: s.x, z: s.z, yaw: wy ? wy.yaw : 0, pitch: 0 };
@@ -290,6 +292,170 @@ registerLocation({
   find(g) {
     const c = g.pois.camp;
     return { x: c.x + 8, z: c.z + 12, yaw: face(c.x + 8, c.z + 12, c.x, c.z), pitch: -0.05 };
+  },
+});
+
+// ---- more destinations: landmarks, lookouts, islands and rivers -------------------------------
+const poi = (g, id) => g.pois.list.find((p) => p.id === id);
+// is the straight line between two eye points clear of terrain?
+function clearView(w, x0, z0, y0, x1, z1, y1) {
+  for (let i = 1; i < 20; i++) {
+    const t = i / 20;
+    const x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+    if (w.getHeight(x, z) > y0 + (y1 - y0) * t - 0.4) return false;
+  }
+  return true;
+}
+// a dry, level spot at a good distance from a landmark with a clear view of it
+function landmarkView(g, p, { rMin = 26, rMax = 55, seed = 1, lookUp = 6, hour } = {}) {
+  const w = g.world;
+  const ty = w.getHeight(p.x, p.z) + lookUp;
+  const s = search(g, { cx: p.x, cz: p.z, r: rMax, rMin, seed, tries: 3000,
+    accept: (x, z, h, b, n) => n.y > 0.88 && clearView(w, x, z, h + 1.7, p.x, p.z, ty),
+    score: (x, z, h) => -flatness(w, x, z, h, 4) - Math.abs(Math.hypot(x - p.x, z - p.z) - (rMin + rMax) / 2) * 0.05 });
+  if (!s) return null;
+  const d = Math.hypot(p.x - s.x, p.z - s.z);
+  return { x: s.x, z: s.z, yaw: face(s.x, s.z, p.x, p.z), pitch: Math.max(-0.15, Math.min(0.18, Math.atan2(ty - (s.h + 1.7), d) * 0.8)) };
+}
+// standing on a high point, looking out over the steepest drop
+function lookout(g, p, seed) {
+  const w = g.world;
+  const s = search(g, { cx: p.x, cz: p.z, r: 40, seed, accept: (x, z, h, b, n) => n.y > 0.8, score: (x, z, h) => h - flatness(w, x, z, h, 3) * 2 });
+  if (!s) return null;
+  let best = 0, by = -1e9;
+  for (let k = 0; k < 24; k++) { const a = (k / 24) * Math.PI * 2; const d = s.h - w.getHeight(s.x + Math.sin(a) * 250, s.z + Math.cos(a) * 250); if (d > by) { by = d; best = a; } }
+  return { x: s.x, z: s.z, yaw: best, pitch: -0.1 };
+}
+// on an island's beach, looking along the shore toward the interior
+function islandView(g, I, seed) {
+  const w = g.world;
+  const s = search(g, { cx: I.x, cz: I.z, r: I.r * 1.05, rMin: I.r * 0.45, seed, tries: 4000, accept: (x, z, h, b, n) => h > 0.7 && h < 4.5 && n.y > 0.92 && !!waterYaw(w, x, z, 30) });
+  if (!s) return null;
+  return { x: s.x, z: s.z, yaw: face(s.x, s.z, I.x, I.z) + 0.8, pitch: 0.03 };
+}
+const island = (id) => ISLANDS.find((i) => i.id === id);
+
+registerLocation({
+  id: 'temple', icon: '🛕', name: 'Temple of the Sun', tag: 'Jungle Ruins', danger: 3, hour: 9.5,
+  desc: 'A stepped temple swallowed by the jungle. Its carvings show riders on long-necked beasts marching toward a burning mountain.',
+  at: { x: -1300, z: 140 },
+  find(g) { const p = poi(g, 'temple'); return p && landmarkView(g, p, { rMin: 28, rMax: 55, seed: 201, lookUp: 9 }); },
+});
+
+registerLocation({
+  id: 'circle', icon: '🗿', name: 'Verdant Stone Circle', tag: 'Ancient Monoliths', danger: 1, hour: 6.6,
+  desc: 'Weathered monoliths standing in the open grass, aligned with the solstice sunrise. Herds pass through at dawn.',
+  at: { x: 0, z: 150 },
+  find(g) { const p = poi(g, 'circle'); return p && landmarkView(g, p, { rMin: 22, rMax: 40, seed: 202, lookUp: 3 }); },
+});
+
+registerLocation({
+  id: 'pillars', icon: '🏛️', name: 'Sunken Pillars', tag: 'Drowned Ruins', danger: 2, hour: 7.8,
+  desc: 'A colonnade sinking into the marsh, its columns wrapped in moss. Legends say a sail-backed hunter guards these waters.',
+  at: { x: 140, z: 1340 },
+  find(g) { const p = poi(g, 'pillars'); return p && landmarkView(g, p, { rMin: 20, rMax: 45, seed: 203, lookUp: 4 }); },
+});
+
+registerLocation({
+  id: 'shrine', icon: '⛩️', name: 'Cliffside Shrine', tag: 'Mountain Ruins', danger: 2, hour: 16.8,
+  desc: 'A shrine to the Sky Father clinging to a ledge high in the Titan Range, with eagles — and worse — circling below.',
+  at: { x: -180, z: -1380 },
+  find(g) { const p = poi(g, 'shrine'); return p && landmarkView(g, p, { rMin: 18, rMax: 42, seed: 204, lookUp: 4 }); },
+});
+
+registerLocation({
+  id: 'grotto', icon: '💎', name: 'Crystal Grotto', tag: 'Cave Entrance', danger: 2, hour: 14,
+  desc: 'A dark mouth in the mountainside. Inside, crystals glow in every colour — bring a headlamp and step in to explore.',
+  at: { x: -180, z: -1380 },
+  find(g) {
+    const p = poi(g, 'crystal-grotto');
+    if (!p) return null;
+    const x = p.x + Math.sin(p.face) * 14, z = p.z + Math.cos(p.face) * 14;
+    return { x, z, yaw: face(x, z, p.x, p.z), pitch: 0.02 };
+  },
+});
+
+registerLocation({
+  id: 'pinecrest', icon: '🌲', name: 'Pinecrest Lookout', tag: 'Pine Forest Overlook', danger: 1, hour: 8.2,
+  desc: 'The highest crag of the Whispering Pines. An ocean of dark conifers rolls away below, wrapped in morning mist.',
+  at: { x: -700, z: -650 },
+  find(g) { const p = poi(g, 'peak-pinecrest'); return p && lookout(g, p, 205); },
+});
+
+registerLocation({
+  id: 'elder', icon: '🍃', name: 'Elder Woods', tag: 'Ancient Forest', danger: 2, hour: 15.2,
+  desc: 'Giant broadleaf trees older than memory. Sunlight dapples a floor of leaf litter, ferns and mossy boulders.',
+  at: { x: 560, z: -330 },
+  find(g) {
+    const R = region('elder');
+    const s = search(g, { cx: R.x, cz: R.z, r: 300, seed: 206, accept: (x, z, h, b, n) => b === BIOME.FOREST && n.y > 0.9, score: (x, z) => g.world.getVeg(x, z) * 3 - flatness(g.world, x, z, g.world.getHeight(x, z), 5) });
+    return s && { x: s.x, z: s.z, yaw: -0.6, pitch: 0.08 };
+  },
+});
+
+registerLocation({
+  id: 'sentinel', icon: '🦅', name: 'Sentinel Rock', tag: 'Jungle Summit', danger: 3, hour: 17.2,
+  desc: 'A lone pinnacle rising above the rainforest canopy. From the top you can see rivers glinting through the green.',
+  at: { x: -1300, z: 140 },
+  find(g) { const p = poi(g, 'peak-sentinel'); return p && lookout(g, p, 207); },
+});
+
+registerLocation({
+  id: 'mesa', icon: '🏜️', name: 'High Mesa', tag: 'Desert Summit', danger: 2, hour: 18.4,
+  desc: 'The tallest table-top in the badlands. At sunset the canyons below burn red and gold all the way to the sea.',
+  at: { x: 1340, z: 430 },
+  find(g) { const p = poi(g, 'peak-mesa'); return p && lookout(g, p, 208); },
+});
+
+registerLocation({
+  id: 'ember', icon: '🔥', name: 'Ember Wastes', tag: 'Lava Fields', danger: 3, hour: 19.2,
+  desc: 'Black basalt plains at the foot of the volcano, scarred by glowing lava channels and drifting ash.',
+  at: { x: 1060, z: -1040 },
+  find(g) {
+    const w = g.world;
+    const rim = poi(g, 'peak-ember');
+    const ty = (rim ? w.getHeight(rim.x, rim.z) : w.getHeight(VOLCANO.x, VOLCANO.z) + 60) + 30;
+    let s = search(g, { cx: VOLCANO.x, cz: VOLCANO.z, r: 540, rMin: 260, seed: 209, tries: 4000, accept: (x, z, h, b, n) => n.y > 0.85 && clearView(w, x, z, h + 1.7, VOLCANO.x, VOLCANO.z, ty),
+      score: (x, z, h) => -flatness(w, x, z, h, 5) - Math.abs(Math.hypot(x - VOLCANO.x, z - VOLCANO.z) - 360) * 0.02 });
+    if (!s) s = search(g, { cx: VOLCANO.x, cz: VOLCANO.z, r: 560, rMin: 260, seed: 219, tries: 4000, accept: (x, z, h, b, n) => n.y > 0.8, score: (x, z, h) => -flatness(w, x, z, h, 5) });
+    if (!s) return null;
+    return { x: s.x, z: s.z, yaw: face(s.x, s.z, VOLCANO.x, VOLCANO.z), pitch: 0.12 };
+  },
+});
+
+registerLocation({
+  id: 'coralkey', icon: '🐚', name: 'Coral Key', tag: 'Tropical Island', danger: 1, hour: 12.5,
+  desc: 'A tiny island ringed by turquoise shallows and coral. White sand, swaying palms and not another soul.',
+  at: { x: 1760, z: 1500 },
+  find(g) { return islandView(g, island('coral-key'), 210); },
+});
+
+registerLocation({
+  id: 'gullrock', icon: '🪨', name: 'Gull Rock', tag: 'Sea Cliffs', danger: 2, hour: 15.8,
+  desc: 'A wave-battered rock far to the north-west, its cliffs alive with seabirds. A sea grotto hides at the waterline.',
+  at: { x: -1820, z: -1520 },
+  find(g) { return islandView(g, island('gull-rock'), 211); },
+});
+
+registerLocation({
+  id: 'atoll', icon: '🌴', name: 'Palm Atoll', tag: 'Remote Atoll', danger: 1, hour: 17.0,
+  desc: 'A ring of sand and palms on the eastern horizon. Turtles nest on its beaches when the moon is full.',
+  at: { x: 1940, z: -180 },
+  find(g) { return islandView(g, island('palm-atoll'), 212); },
+});
+
+registerLocation({
+  id: 'river', icon: '🏞️', name: 'Serpent River', tag: 'River Valley', danger: 2, hour: 10.8,
+  desc: 'The great river winds down from the Titan Range through gorges and meadows. Herds come to drink along its banks.',
+  at: { x: -40, z: -170 },
+  find(g) {
+    const w = g.world;
+    const s = search(g, { cx: -100, cz: -320, r: 260, seed: 213, tries: 3000,
+      accept: (x, z, h, b, n) => { const q = w.gen.riverQuery(x, z, {}); return n.y > 0.9 && q.dist > q.width * 0.5 + 5 && q.dist < q.width * 0.5 + 22; },
+      score: (x, z, h) => -flatness(w, x, z, h, 4) });
+    if (!s) return null;
+    const wy = waterYaw(w, s.x, s.z, 28);
+    return { x: s.x, z: s.z, yaw: wy ? wy.yaw + 0.5 : 0, pitch: 0.02 };
   },
 });
 

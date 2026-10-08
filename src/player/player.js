@@ -185,7 +185,7 @@ export class Player {
       // Land
       const n = w.getNormal(P.x, P.z, _n);
       const steep = n.y < 0.64;
-      let sp = this.crouch ? 2.0 : wantSprint ? 31.5 : 4.4;
+      let sp = this.crouch ? 2.0 : wantSprint ? 21 : 4.4;
       sp *= 1 + 0.03 * g.progress.skill('endurance');
       if (this.hunger <= 0 || this.thirst <= 0) sp *= 0.8;
       if (g.weather && g.weather.snowDepth(P) > 0) sp *= 0.85;
