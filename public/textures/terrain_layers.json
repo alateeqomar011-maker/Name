@@ -1,0 +1,188 @@
+{
+ "layers": [
+  "grass",
+  "grassdry",
+  "soil",
+  "gravel",
+  "trail",
+  "cracked",
+  "sand",
+  "dune",
+  "snow",
+  "rock",
+  "mossrock",
+  "sandstone",
+  "basalt",
+  "coastrock",
+  "mossground"
+ ],
+ "albedoSize": 1024,
+ "dataSize": 512,
+ "info": {
+  "grass": {
+   "mean": [
+    0.2403,
+    0.3227,
+    0.1424
+   ],
+   "slope": 0.16,
+   "normal": "",
+   "cx": -0.24,
+   "cy": -0.25
+  },
+  "grassdry": {
+   "mean": [
+    0.5901,
+    0.5675,
+    0.3375
+   ],
+   "slope": 0.165,
+   "normal": "",
+   "cx": -0.42,
+   "cy": -0.42
+  },
+  "soil": {
+   "mean": [
+    0.4258,
+    0.4091,
+    0.4009
+   ],
+   "slope": 0.26,
+   "normal": "",
+   "cx": -0.54,
+   "cy": -0.55
+  },
+  "gravel": {
+   "mean": [
+    0.4953,
+    0.4841,
+    0.4751
+   ],
+   "slope": 0.319,
+   "normal": "",
+   "cx": -0.6,
+   "cy": -0.6
+  },
+  "trail": {
+   "mean": [
+    0.5457,
+    0.4779,
+    0.3974
+   ],
+   "slope": 0.26,
+   "normal": "derived",
+   "cx": 0.0,
+   "cy": 0.0
+  },
+  "cracked": {
+   "mean": [
+    0.7004,
+    0.556,
+    0.4204
+   ],
+   "slope": 0.24,
+   "normal": "derived",
+   "cx": 0.0,
+   "cy": 0.0
+  },
+  "sand": {
+   "mean": [
+    0.6125,
+    0.5213,
+    0.4341
+   ],
+   "slope": 0.199,
+   "normal": "",
+   "cx": -0.52,
+   "cy": -0.42
+  },
+  "dune": {
+   "mean": [
+    0.7227,
+    0.6556,
+    0.5627
+   ],
+   "slope": 0.179,
+   "normal": "flipY",
+   "cx": -0.93,
+   "cy": 0.97
+  },
+  "snow": {
+   "mean": [
+    0.7728,
+    0.7765,
+    0.7782
+   ],
+   "slope": 0.09,
+   "normal": "",
+   "cx": -0.67,
+   "cy": -0.69
+  },
+  "rock": {
+   "mean": [
+    0.3068,
+    0.3022,
+    0.2735
+   ],
+   "slope": 0.287,
+   "normal": "",
+   "cx": -0.86,
+   "cy": -0.81
+  },
+  "mossrock": {
+   "mean": [
+    0.4165,
+    0.3518,
+    0.2004
+   ],
+   "slope": 0.32,
+   "normal": "derived",
+   "cx": 0.0,
+   "cy": 0.0
+  },
+  "sandstone": {
+   "mean": [
+    0.7199,
+    0.5089,
+    0.3786
+   ],
+   "slope": 0.3,
+   "normal": "derived",
+   "cx": 0.0,
+   "cy": 0.0
+  },
+  "basalt": {
+   "mean": [
+    0.1029,
+    0.1066,
+    0.1062
+   ],
+   "slope": 0.343,
+   "normal": "",
+   "cx": -0.58,
+   "cy": -0.6
+  },
+  "coastrock": {
+   "mean": [
+    0.2917,
+    0.2745,
+    0.2374
+   ],
+   "slope": 0.112,
+   "normal": "",
+   "cx": -0.85,
+   "cy": -0.85
+  },
+  "mossground": {
+   "mean": [
+    0.283,
+    0.2589,
+    0.1711
+   ],
+   "slope": 0.26,
+   "normal": "derived",
+   "cx": 0.0,
+   "cy": 0.0
+  }
+ }
+}

@@ -121,9 +121,10 @@ void main(){
     vec3 amb = mix(uHorizon * 0.95, uZenith * 0.8 + uHorizon * 0.3, 0.5) * mix(1.0, 0.12, uNight);
     vec3 sunC = uSunColor * mix(1.55, 0.05, uNight) * (1.0 - uCloudDark * 0.7);
     float phase = 0.6 + 1.6 * pow(sd, 6.0) + 0.5 * pow(sd, 2.0);
-    float jit = hash12(gl_FragCoord.xy + fract(uTime) * 61.0);
-    for (int j = 0; j < 6; j++) {
-      float fj = float(j) + jit;
+    // stable interleaved-gradient dither (no frame-to-frame sparkle) over 9 slab steps
+    float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 0.9;
+    for (int j = 0; j < 9; j++) {
+      float fj = (float(j) + jit) * (6.0 / 9.0);
       vec2 p = base * (1.0 + fj * 0.045) + uCloudOffset;
       float shape = fbm5(p * 1.15);
       float detail = fbm3(p * 4.2 + 7.0);
@@ -140,7 +141,7 @@ void main(){
       float powder = 1.0 - exp(-d * 3.0);
       vec3 lit = amb * (0.55 + 0.45 * h) + sunC * beer * phase * powder * 0.9;
       lit = mix(lit, vec3(0.16, 0.17, 0.2) * mix(1.0, 0.15, uNight), uCloudDark * (1.0 - h * 0.5));
-      float a = d * 0.55;
+      float a = d * 0.55 * (6.0 / 9.0);
       acc += lit * a * trans;
       trans *= 1.0 - a;
     }
@@ -233,6 +234,7 @@ export class Sky {
     sc.left = -90; sc.right = 90; sc.top = 90; sc.bottom = -90; sc.near = 10; sc.far = 900;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.6;
+    this.sun.shadow.radius = 2.4; // soft Vogel-disk PCF penumbra (~20 cm)
     scene.add(this.sun);
     scene.add(this.sun.target);
     this.hemi = new THREE.HemisphereLight(0xbcd4ff, 0x4a3f2a, 1.0);
@@ -248,10 +250,15 @@ export class Sky {
     this._z = new THREE.Color(); this._h = new THREE.Color(); this._t = new THREE.Color();
   }
 
-  setShadowQuality(size, enabled) {
+  setShadowQuality(size, enabled, extent = 180) {
     this.sun.castShadow = enabled;
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     this.sun.shadow.mapSize.set(size, size);
+    // sharp shadow box around the player; the long-range terrain shadow pass covers the rest
+    const sc = this.sun.shadow.camera;
+    this.shadowExtent = extent;
+    sc.left = -extent / 2; sc.right = extent / 2; sc.top = extent / 2; sc.bottom = -extent / 2;
+    sc.updateProjectionMatrix();
   }
 
   // weather: { cloud, dark, fog, rain, tint:Color|null, ash }
@@ -339,7 +346,7 @@ export class Sky {
     const ld = this.lightDir;
     this.sun.position.set(focus.x + ld.x * 400, focus.y + Math.max(ld.y, 0.05) * 400, focus.z + ld.z * 400);
     // snap target to texel grid to reduce shimmering
-    const texel = 180 / this.sun.shadow.mapSize.x;
+    const texel = (this.shadowExtent || 180) / this.sun.shadow.mapSize.x;
     this.sun.target.position.set(Math.round(focus.x / texel) * texel, focus.y, Math.round(focus.z / texel) * texel);
     this.sun.target.updateMatrixWorld();
 

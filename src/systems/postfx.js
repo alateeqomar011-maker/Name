@@ -293,3 +293,136 @@ export class WaterPass extends Pass {
   }
   dispose() { this.copyMat.dispose(); this.fsQuad.dispose(); this.aoRT.dispose(); this.aoRT2.dispose(); this.aoMat.dispose(); this.blurMat.dispose(); this.aoQuad.dispose(); this.blurQuad.dispose(); }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Cinematic lens: depth of field focused on the subject (the player in third person, the screen
+// centre otherwise) with a soft circular bokeh, plus camera motion blur reconstructed from depth
+// and last frame's view-projection, so fast turns and the fast-travel swoop smear like film.
+const cineShader = {
+  uniforms: {
+    tDiffuse: { value: null }, tDepth: { value: null }, uRes: { value: new THREE.Vector2(1, 1) },
+    uInvProj: { value: new THREE.Matrix4() }, uInvView: { value: new THREE.Matrix4() }, uPrevVP: { value: new THREE.Matrix4() },
+    uNear: { value: 0.15 }, uFar: { value: 9000 }, uFocus: { value: 6 }, uAperture: { value: 1 }, uFarBlur: { value: 1 },
+    uMaxCoC: { value: 7 }, uShutter: { value: 0.5 }, uMB: { value: 1 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform vec2 uRes;
+    uniform mat4 uInvProj; uniform mat4 uInvView; uniform mat4 uPrevVP;
+    uniform float uNear; uniform float uFar; uniform float uFocus; uniform float uAperture; uniform float uFarBlur; uniform float uMaxCoC;
+    uniform float uShutter; uniform float uMB;
+    varying vec2 vUv;
+    float viewZ(float d){ return (uNear * uFar) / ((uFar - uNear) * d - uFar); }
+    // signed circle of confusion in pixels: + behind the focus plane, - in front of it
+    float coc(float d){
+      float z = -viewZ(d);
+      float c = (z - uFocus) / max(z, 0.01);
+      // background softens gently and only well behind the subject; foreground blurs sooner
+      float far = smoothstep(uFocus * 4.0, uFocus * 40.0, z) * uFarBlur * 0.22;
+      float near = clamp(-c, 0.0, 1.0) * 1.6 * smoothstep(uFocus * 0.6, uFocus * 0.15, z);
+      return (far - near) * uMaxCoC * uAperture;
+    }
+    const float GA = 2.39996323;
+    void main(){
+      vec2 px = 1.0 / uRes;
+      float d0 = texture2D(tDepth, vUv).r;
+      vec4 base = texture2D(tDiffuse, vUv);
+      vec3 col = base.rgb;
+      float c0 = coc(d0);
+      // ---- depth of field: golden-angle gather, samples only spill onto pixels they cover ----
+      if (abs(c0) > 0.35 || uAperture > 0.0) {
+        vec3 acc = col; float wsum = 1.0;
+        float R = uMaxCoC * uAperture;
+        if (R > 0.3) {
+          for (int i = 1; i < 24; i++) {
+            float fi = float(i);
+            float r = sqrt(fi / 24.0) * R;
+            vec2 o = vec2(cos(fi * GA), sin(fi * GA)) * r;
+            vec2 uv = vUv + o * px;
+            float ds = texture2D(tDepth, uv).r;
+            float cs = coc(ds);
+            // a sample contributes if its own blur reaches this pixel (foreground bleeds over
+            // the sharp subject, sharp background never leaks onto a blurred foreground)
+            // nearer samples spread by their own blur; farther ones never cover something in
+            // front of them, so they only count as far as this pixel is itself blurred
+            float reach = ds < d0 ? abs(cs) : min(abs(cs), abs(c0));
+            float w = smoothstep(r - 1.0, r + 0.5, reach);
+            acc += texture2D(tDiffuse, uv).rgb * w; wsum += w;
+          }
+          col = acc / wsum;
+        }
+      }
+      // ---- camera motion blur ----
+      if (uMB > 0.0) {
+        vec4 ndc = vec4(vUv * 2.0 - 1.0, min(d0, 0.99999) * 2.0 - 1.0, 1.0);
+        vec4 vp = uInvProj * ndc; vp /= vp.w;
+        vec4 wp = uInvView * vp;
+        vec4 pc = uPrevVP * wp;
+        vec2 prevUV = pc.xy / pc.w * 0.5 + 0.5;
+        vec2 vel = (vUv - prevUV) * uShutter * uMB;
+        float vlen = length(vel * uRes);
+        float maxPx = 40.0;
+        if (vlen > maxPx) vel *= maxPx / vlen;
+        if (vlen > 0.75 && pc.w > 0.0) {
+          vec3 m = col; float n = 1.0;
+          for (int i = 1; i <= 8; i++) {
+            float t = float(i) / 8.0 - 0.5;
+            vec2 uv = clamp(vUv + vel * t, px, 1.0 - px);
+            // don't drag a nearer object's colour across a farther one
+            float ds = texture2D(tDepth, uv).r;
+            float w = ds >= d0 - 0.0005 || vlen > 6.0 ? 1.0 : 0.3;
+            m += texture2D(tDiffuse, uv).rgb * w; n += w;
+          }
+          col = mix(col, m / n, smoothstep(0.75, 3.0, vlen));
+        }
+      }
+      gl_FragColor = vec4(col, base.a);
+      // pass the scene depth through so later passes (god rays) still see it
+      gl_FragDepth = d0;
+    }`,
+};
+
+export class CinematicPass extends Pass {
+  constructor(camera) {
+    super();
+    this.camera = camera;
+    // reads colour + depth from the read buffer and writes both, so it can sit anywhere after the
+    // water pass without sampling a depth texture attached to its own target
+    this.material = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(cineShader.uniforms), vertexShader: cineShader.vertexShader, fragmentShader: cineShader.fragmentShader, depthTest: true, depthWrite: true, depthFunc: THREE.AlwaysDepth });
+    this.uniforms = this.material.uniforms;
+    this.fsQuad = new FullScreenQuad(this.material);
+    this.prevVP = new THREE.Matrix4();
+    this._vp = new THREE.Matrix4();
+    this._first = true;
+    this.focus = 6;
+  }
+  // focusDist: metres to the subject; aperture: 0 = everything sharp
+  setup(focusDist, aperture, farBlur, motionBlur, dt) {
+    this.focus += (focusDist - this.focus) * (1 - Math.exp(-dt * 6));
+    const u = this.uniforms;
+    u.uFocus.value = Math.max(0.5, this.focus);
+    u.uAperture.value = aperture;
+    u.uFarBlur.value = farBlur;
+    u.uMB.value = motionBlur;
+    // shutter scales with frame time so the smear length stays like a 180° film shutter
+    u.uShutter.value = THREE.MathUtils.clamp(0.5 * (1 / 60) / Math.max(dt, 1e-3), 0.25, 0.75);
+  }
+  setSize(w, h) { this.uniforms.uRes.value.set(w, h); }
+  render(renderer, writeBuffer, readBuffer) {
+    const cam = this.camera;
+    const u = this.uniforms;
+    u.tDiffuse.value = readBuffer.texture;
+    u.tDepth.value = readBuffer.depthTexture;
+    u.uNear.value = cam.near; u.uFar.value = cam.far;
+    u.uInvProj.value.copy(cam.projectionMatrixInverse);
+    u.uInvView.value.copy(cam.matrixWorld);
+    this._vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    if (this._first) { this.prevVP.copy(this._vp); this._first = false; }
+    u.uPrevVP.value.copy(this.prevVP);
+    this.prevVP.copy(this._vp);
+    if (this.renderToScreen) renderer.setRenderTarget(null);
+    else { renderer.setRenderTarget(writeBuffer); if (this.clear) renderer.clear(); }
+    this.fsQuad.render(renderer);
+  }
+  dispose() { this.material.dispose(); this.fsQuad.dispose(); }
+}

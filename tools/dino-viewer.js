@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { SPECIES } from '../src/dinos/species.js';
 import { buildTemplate, makeSkinMaterial } from '../src/dinos/model.js';
 import { DinoRig } from '../src/dinos/rig.js';
+import { loadTerrainTextures } from '../src/world/materials.js';
 
 const params = new URLSearchParams(location.search);
 const only = params.get('s');
@@ -10,6 +11,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
+await loadTerrainTextures(renderer, 256, '/');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fb8cc);
 scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x554433, 1.2));

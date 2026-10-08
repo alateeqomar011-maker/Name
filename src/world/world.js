@@ -368,7 +368,7 @@ export class World {
       else if (b === BIOME.VOLCANIC) dry = 0.35;
       sf[i * 4] = lit * 255; sf[i * 4 + 1] = sand * 255; sf[i * 4 + 2] = grav * 255; sf[i * 4 + 3] = dry * 255;
     }
-    // second surface layer: r = swamp mud / standing water, g = moss & algae
+    // second surface layer: r = swamp mud / standing water, g = moss & algae, b = volcanic, a = desert
     const s2 = new Uint8Array(N * N * 4);
     for (let i = 0; i < N * N; i++) {
       const b = this.biomes[i];
@@ -377,7 +377,10 @@ export class World {
       if (b === BIOME.SWAMP) { mud = h < 6 ? 1 : 0.6; moss = 0.7; }
       else if (b === BIOME.JUNGLE) { mud = 0.25; moss = 0.5; }
       else if (b === BIOME.FOREST) moss = 0.3;
-      s2[i * 4] = mud * 255; s2[i * 4 + 1] = moss * 255; s2[i * 4 + 3] = 255;
+      // b = volcanic ash fields, a = desert & canyon (photo material selection)
+      const volc = b === BIOME.VOLCANIC ? 1 : 0;
+      const des = b === BIOME.DESERT || b === BIOME.CANYON ? 1 : 0;
+      s2[i * 4] = mud * 255; s2[i * 4 + 1] = moss * 255; s2[i * 4 + 2] = volc * 255; s2[i * 4 + 3] = des * 255;
     }
     this.surfTex2 = new THREE.DataTexture(s2, N, N, THREE.RGBAFormat);
     this.surfTex2.magFilter = THREE.LinearFilter;

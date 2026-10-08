@@ -1,5 +1,7 @@
 // Procedural vegetation assets: painted leaf atlas, bark texture and plant/tree/rock geometries.
 import * as THREE from 'three';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { TerrainTextures, GLSL_PHOTO, photoUniforms } from './materials.js';
 import { mulberry32, Simplex } from '../core/noise.js';
 import { addWind, foliageDepthMaterial, U } from './shaderlib.js';
 import { atmospherePatch } from './atmosphere.js';
@@ -756,20 +758,37 @@ function scrub(seed) {
 }
 
 export function rockGeometry(seed, detail = 3, squash = 0.7, ore = false) {
-  const g = new THREE.IcosahedronGeometry(1, detail);
+  // a noise-displaced sphere cut by a few random fracture planes: flat split faces, sharp edges
+  // and rounded weathered crowns, like real boulders
+  let g = new THREE.IcosahedronGeometry(1, detail);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g);
   const nz = new Simplex(seed);
+  const rand = mulberry32(seed * 7919 + 13);
   const p = g.attributes.position;
   const cols = new Float32Array(p.count * 3);
   const v = new THREE.Vector3();
+  const cuts = [];
+  const nCuts = 4 + Math.floor(rand() * 3);
+  for (let i = 0; i < nCuts; i++) {
+    const a = rand() * Math.PI * 2, y = rand() * 1.4 - 0.5;
+    cuts.push({ n: new THREE.Vector3(Math.cos(a), y, Math.sin(a)).normalize(), d: 0.62 + rand() * 0.25 });
+  }
   for (let i = 0; i < p.count; i++) {
     v.fromBufferAttribute(p, i);
-    const n = nz.fbm(v.x * 1.3 + seed, v.y * 1.3 + v.z * 0.7, 4) * 0.32 + nz.noise(v.x * 4, v.z * 4 + v.y) * 0.05;
-    const r = 1 + n;
-    v.multiplyScalar(r);
+    const n = nz.fbm(v.x * 1.3 + seed, v.y * 1.3 + v.z * 0.7, 4) * 0.3;
+    const ridge = (1 - Math.abs(nz.noise(v.x * 3.1 + seed, v.y * 3.1 + v.z * 2.3))) ** 3 * 0.05;
+    v.multiplyScalar(1 + n + ridge + nz.noise(v.x * 6, v.z * 6 + v.y * 5) * 0.02);
+    // fracture planes flatten whatever pokes through them
+    for (const c of cuts) {
+      const t = v.dot(c.n) - c.d;
+      if (t > 0) v.addScaledVector(c.n, -t * 0.88);
+    }
     v.y *= squash;
     if (v.y < -0.25) v.y = -0.25 + (v.y + 0.25) * 0.3;
     p.setXYZ(i, v.x, v.y, v.z);
-    let c = 0.42 + n * 0.5 + (v.y > 0.3 ? 0.06 : 0);
+    let c = 0.44 + n * 0.45 + (v.y > 0.3 ? 0.05 : 0);
     let rC = c, gC = c * 0.97, bC = c * 0.92;
     if (ore) {
       const vein = Math.abs(nz.noise(v.x * 3.5, v.y * 3.5 + v.z * 2));
@@ -784,20 +803,78 @@ export function rockGeometry(seed, detail = 3, squash = 0.7, ore = false) {
   return g;
 }
 
-// boulders gather snow on their upper faces in winter
-function snowyRock(m) {
+// Boulders: photographed rock in world-space triplanar projection. The rock type follows the
+// ground it sits on (granite, desert sandstone, volcanic basalt, wet coastal rock), damp forests
+// grow moss over the tops and winter settles snow into the upper faces.
+function photoRock(m) {
   m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, photoUniforms());
     shader.uniforms.uWinter = U.uWinter;
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uWinter;')
-      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+    shader.uniforms.uSurfTex = { get value() { return TerrainTextures.world ? TerrainTextures.world.surfTex : null; } };
+    shader.uniforms.uSurfTex2 = { get value() { return TerrainTextures.world ? TerrainTextures.world.surfTex2 : null; } };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRW; varying vec3 vRN;')
+      .replace('#include <project_vertex>', `#include <project_vertex>
         {
-          vec3 wN = inverseTransformDirection(normal, viewMatrix);
-          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.68, 0.71, 0.76), smoothstep(0.3, 0.75, wN.y) * uWinter * 0.95);
+          vec4 rwp = vec4(transformed, 1.0); vec3 rwn = objectNormal;
+        #ifdef USE_INSTANCING
+          rwp = instanceMatrix * rwp; rwn = mat3(instanceMatrix) * rwn;
+        #endif
+          vRW = (modelMatrix * rwp).xyz; vRN = normalize(mat3(modelMatrix) * rwn);
         }`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>
+        uniform float uWinter; uniform sampler2D uSurfTex; uniform sampler2D uSurfTex2;
+        varying vec3 vRW; varying vec3 vRN;
+        ${GLSL_PHOTO}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        vec3 rn = normalize(vRN);
+        vec3 rdx = dFdx(vRW), rdy = dFdy(vRW);
+        vec3 rNrm = rn; float rRough = 0.85;
+        if (uTexOK > 0.5) {
+          vec3 rbw = pow(abs(rn), vec3(4.0)); rbw /= (rbw.x + rbw.y + rbw.z);
+          vec2 sUV = ((vRW.xz + 2048.0) / 4.0 + 0.5) / 1025.0;
+          vec4 sf = texture2D(uSurfTex, sUV), sf2 = texture2D(uSurfTex2, sUV);
+          float Lr = L_ROCK;
+          if (sf2.a > 0.5) Lr = L_SANDSTONE; else if (sf2.b > 0.5) Lr = L_BASALT; else if (vRW.y < 3.5) Lr = L_COASTROCK;
+          vec3 rA, rN; float rH;
+          float s = 1.0 / 2.8;
+          photoTri(Lr, vRW, rn, rbw, s, rdx, rdy, rA, rN, rH);
+          vec3 rM = textureLod(uTA, vec3(0.5, 0.5, Lr), 12.0).rgb;
+          rRough = ROUGH[int(Lr)];
+          // moss creeping over the tops in damp forests
+          float mossK = clamp(sf2.g * 1.4 + sf.r * 0.6, 0.0, 1.0) * smoothstep(-0.1, 0.8, rn.y) * step(sf2.a + sf2.b, 0.5);
+          if (mossK > 0.03) {
+            vec3 mA, mN; float mH;
+            photoTri(L_MOSSGROUND, vRW + 5.3, rn, rbw, s * 1.3, rdx, rdy, mA, mN, mH);
+            float a1 = rH + (1.0 - mossK), a2 = mH + mossK; float mm = max(a1, a2) - 0.2;
+            float t = max(a2 - mm, 0.0) / max(max(a1 - mm, 0.0) + max(a2 - mm, 0.0), 1e-4);
+            rA = mix(rA, mA, t); rN = normalize(mix(rN, mN, t)); rM = mix(rM, textureLod(uTA, vec3(0.5, 0.5, L_MOSSGROUND), 12.0).rgb, t);
+            rRough = mix(rRough, 0.9, t);
+          }
+          vec3 vcR = diffuseColor.rgb;
+          float lumP = max(dot(rM, LUMA), 1e-4), lumV = max(dot(vcR, LUMA), 1e-4);
+          vec3 tint = pow(vec3(clamp(lumV / lumP, 0.3, 3.0)), vec3(0.55)) * pow(clamp((vcR / lumV) / max(rM / lumP, vec3(1e-3)), vec3(0.5), vec3(2.0)), vec3(0.3));
+          diffuseColor.rgb = rA * tint;
+          rNrm = rN;
+          // winter: snow settles on the upper faces, deepest in the hollows of the rock
+          float snowR = uWinter * smoothstep(0.25, 0.7, rn.y - (rH - 0.5) * 0.35);
+          if (snowR > 0.01) {
+            vec3 sA, sN; float sH;
+            photoTri(L_SNOW, vRW, rn, rbw, s * 0.8, rdx, rdy, sA, sN, sH);
+            diffuseColor.rgb = mix(diffuseColor.rgb, sA / max(dot(sA, LUMA), 1e-3) * 0.68, snowR);
+            rNrm = normalize(mix(rNrm, sN, snowR)); rRough = mix(rRough, 0.6, snowR);
+          }
+        } else {
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.68, 0.71, 0.76), smoothstep(0.3, 0.75, rn.y) * uWinter * 0.95);
+        }`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = rRough;`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        normal = normalize((viewMatrix * vec4(rNrm, 0.0)).xyz);`);
     atmospherePatch(shader);
   };
-  m.customProgramCacheKey = () => 'snowyRock';
+  m.customProgramCacheKey = () => 'photoRock';
   return m;
 }
 
@@ -812,8 +889,13 @@ export class FloraLibrary {
     }), 1.0, true, 'leaf');
     this.leafMat.alphaToCoverage = true;
     this.leafDepthMat = foliageDepthMaterial(this.atlas, 1.0);
-    this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, bumpMap: bark.bump, bumpScale: 2.5, vertexColors: true, roughness: 0.95 }), 0.6, false, 'bark');
-    this.rockMat = snowyRock(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }));
+    // photographed bark when available (loaded during boot), painted bark otherwise
+    const photoBark = TerrainTextures.barkMap
+      ? { map: TerrainTextures.barkMap, normalMap: TerrainTextures.barkNormal, normalScale: new THREE.Vector2(1.6, 1.6), vertexColors: true, roughness: 0.92 }
+      : { map: this.bark, bumpMap: bark.bump, bumpScale: 2.5, vertexColors: true, roughness: 0.95 };
+    if (TerrainTextures.barkMap) this.bark = TerrainTextures.barkMap;
+    this.trunkMat = addWind(new THREE.MeshStandardMaterial(photoBark), 0.6, false, 'bark');
+    this.rockMat = photoRock(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }));
     this.oreMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 });
     this.types = {
       conifer: conifer(11), conifer2: conifer(12), oak: oak(21), oak2: oak(22), kapok: kapok(31), palm: palm(41), palm2: palm(42),

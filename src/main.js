@@ -6,7 +6,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import './ui/style.css';
-import { GodRaysPass, WaterPass } from './systems/postfx.js';
+import { GodRaysPass, WaterPass, CinematicPass } from './systems/postfx.js';
 
 import { Emitter } from './core/events.js';
 import { Input } from './core/input.js';
@@ -16,6 +16,8 @@ import { REGIONS, BIOME, VOLCANO } from './world/worldgen.js';
 import { U } from './world/shaderlib.js';
 import { installAtmosphere, updateAtmosphere } from './world/atmosphere.js';
 import { Terrain } from './world/terrain.js';
+import { loadTerrainTextures } from './world/materials.js';
+import { TerrainShadow } from './world/terrainShadow.js';
 import { FloraLibrary } from './world/flora.js';
 import { Vegetation } from './world/vegetation.js';
 import { Grass } from './world/grass.js';
@@ -52,10 +54,10 @@ const SETTINGS_KEY = 'primeval-frontier-settings';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const QUALITY = {
-  low: { pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
-  medium: { pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
-  high: { pixelRatio: 1.25, shadow: 2048, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
-  ultra: { pixelRatio: 2, shadow: 4096, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
+  low: { lens: 0, texSize: 256, pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
+  medium: { lens: 0.6, texSize: 512, pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
+  high: { lens: 1, texSize: 1024, pixelRatio: 1.25, shadow: 4096, shadowExtent: 240, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
+  ultra: { lens: 1, texSize: 1024, pixelRatio: 2, shadow: 4096, shadowExtent: 300, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
 };
 
 const GradeShader = {
@@ -124,7 +126,7 @@ class Game extends Emitter {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap; // Vogel-disk filtered; softness from light.shadow.radius
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0xbfd0dd, 0.0006);
     this.scene.background = new THREE.Color(0x87a8c8);
@@ -143,12 +145,16 @@ class Game extends Emitter {
     const step = async (pct, text) => { fill.style.width = pct + '%'; msg.textContent = text; await new Promise((r) => setTimeout(r, 16)); };
 
     await step(2, 'Shaping the continent…');
+    // photographed materials stream in while the continent is generated
+    const texLoad = loadTerrainTextures(renderer, this.quality.texSize || 1024);
     this.world = new World(1337);
     await this.world.generate((p) => { fill.style.width = 2 + p * 40 + '%'; });
     await step(44, 'Painting the land…');
     this.fx = new FX(this);
     this.sky = new Sky(this.scene, renderer);
+    await texLoad;
     this.terrain = new Terrain(this.world, this.scene, this.quality);
+    this.terrShadow = new TerrainShadow(renderer, this.world);
     await step(52, 'Growing forests…');
     this.flora = new FloraLibrary();
     this.veg = new Vegetation(this.world, this.scene, this.flora, this.quality);
@@ -305,6 +311,9 @@ class Game extends Emitter {
     this.composer.addPass(this.renderPass);
     this.waterPass = new WaterPass(this.scene, this.camera);
     this.composer.addPass(this.waterPass);
+    // depth of field + camera motion blur on the finished scene (passes depth through)
+    this.cine = new CinematicPass(this.camera);
+    this.composer.addPass(this.cine);
     this.godRays = new GodRaysPass();
     this.composer.addPass(this.godRays);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.24, 0.4, 0.92);
@@ -326,7 +335,7 @@ class Game extends Emitter {
       if (this.veg) { for (const [k, cell] of this.veg.cells) { this.veg._setLoaded(cell.cx, cell.cz, false); this.veg._disposeLayer(cell.trees); if (cell.ground) this.veg._disposeLayer(cell.ground); } this.veg.cells.clear(); }
       if (this.impostors) this.impostors.reset();
     }
-    this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows);
+    this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows, this.quality.shadowExtent || 180);
     if (this.bloom) this.bloom.enabled = this.quality.bloom;
     if (this.waterPass) this.waterPass.ao = !!this.quality.bloom;
     this.audio.setVolume(S.volume);
@@ -504,6 +513,7 @@ class Game extends Emitter {
     const wp = this.weather.skyParams();
     if (this.events.ashTint > 0.05) { wp.tint = new THREE.Color(0.45, 0.35, 0.3); wp.tintAmt = this.events.ashTint; wp.fogTint = wp.tint; wp.cloud = Math.max(wp.cloud, this.events.ashTint); }
     this.sky.update(dt, this.clock.hour, wp, P, inCave);
+    if (this.terrShadow) this.terrShadow.update(dt, this.sky.lightDir);
     this.sky.follow(this.camera.position);
     const mist = inCave ? 0 : this._mist(P);
     updateAtmosphere(this.camera, this.sky.sunDir, this.sky.sun.color.clone().multiplyScalar(Math.min(1.4, this.sky.sun.intensity / 2.4)), inCave ? 0 : this.weather.local.cloud, this.sky.cloudOffset, inCave ? 0.6 : 1 + this.weather.local.fog * 0.15, mist, this._mistBase || 0);
@@ -548,6 +558,16 @@ class Game extends Emitter {
       const sc = this.sky.uniforms.uGlow.value.clone().multiplyScalar(0.5).add(U.uSunColor.value.clone().multiplyScalar(0.6));
       this.godRays.setup(this.camera, sd, sc, strength, this.camera.aspect);
       this.godRays.enabled = !!this.quality.bloom; // also sanitises the frame before bloom
+    }
+    if (this.cine) {
+      // focus on the explorer in third person, on the distance ahead otherwise
+      const third = this.cam.mode === 'third' && !this.player.inVehicle;
+      const focus = third ? Math.max(1.5, this.camera.position.distanceTo(this.player.pos) + 0.2) : 25;
+      const lens = this.quality.lens ?? 0;
+      const arriving = this.cam.arrival ? 1 : 0;
+      const photo = this.player.photoMode ? 1 : 0;
+      this.cine.enabled = lens > 0 && !this.cam.underwater;
+      this.cine.setup(focus, lens * (1 + arriving * 0.6 + photo * 0.4), 1 + photo, (this.settings.motionBlur === false ? 0 : 1) * (lens > 0.5 ? 1 : 0.6), dt);
     }
     const G = this.grade.uniforms;
     G.uTime.value = U.uTime.value;

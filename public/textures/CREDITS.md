@@ -1,0 +1,29 @@
+# Texture credits
+
+The terrain material arrays (`terrain_albedo.jpg`, `terrain_data.jpg`) are built by
+`tools/build_textures.py` from these photo-scanned sources:
+
+| Layer | Source | License |
+|---|---|---|
+| grass | ambientCG Grass001 | CC0 1.0 |
+| grassdry | ambientCG Ground037 | CC0 1.0 |
+| soil | ambientCG Ground036 | CC0 1.0 |
+| gravel | ambientCG Gravel015 | CC0 1.0 |
+| trail | Poly Haven "rocky_trail" | CC0 1.0 |
+| cracked | Poly Haven "rock_boulder_cracked" | CC0 1.0 |
+| sand | Godot demo projects, material testers "sand" | MIT (Godot Engine contributors) |
+| dune | "ground092c" from the PlayCanvas engine examples | MIT (PlayCanvas Ltd.) |
+| snow | ambientCG Snow006 | CC0 1.0 |
+| rock | ambientCG Rock020 | CC0 1.0 |
+| mossrock | Poly Haven "aerial_rocks_02" | CC0 1.0 |
+| sandstone | Godot demo projects, material testers "rock" | MIT (Godot Engine contributors) |
+| basalt | ambientCG Rock035 (recoloured) | CC0 1.0 |
+| coastrock | "seaside-rocks01" from the PlayCanvas engine examples | MIT (PlayCanvas Ltd.) |
+| mossground | Poly Haven "coast_sand_rocks_02" | CC0 1.0 |
+
+ambientCG: https://ambientcg.com — Poly Haven: https://polyhaven.com
+
+Tree bark (`bark_albedo.jpg`, `bark_normal.jpg`): jMonkeyEngine test data, `Models/Tree` bark maps
+(BSD 3-Clause, Copyright (c) 2009-2024 jMonkeyEngine).
+
+Dinosaur skin detail (`skin_nh.jpg`, `skin_ao.jpg`): generated procedurally by `tools/build_skin.py` (project-original).

@@ -14,11 +14,24 @@ export const A = {
   uFogBaseA: { value: 0 },
   uMistA: { value: 0 }, // low-lying valley mist density
   uMistBase: { value: 0 },
+  uTerrShadow: { value: null }, // long-range terrain shadow heights (terrainShadow.js)
+  uTerrShadowOn: { value: 0 },
 };
 
 const PARS = /* glsl */ `
 uniform mat4 uInvView; uniform vec3 uSunDirA; uniform vec3 uSunColA; uniform float uCloudCoverA; uniform vec2 uCloudOffA;
 uniform float uHazeA; uniform float uFogBaseA; uniform float uMistA; uniform float uMistBase;
+uniform sampler2D uTerrShadow; uniform float uTerrShadowOn;
+// sunlit unless the point sits below the height a ridge between it and the sun shades
+float aTerrainShadowAt(vec3 wp){
+  if (uTerrShadowOn < 0.5) return 1.0;
+  vec2 uv = (wp.xz + 2048.0) / 4096.0;
+  if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return 1.0;
+  float sh = texture2D(uTerrShadow, uv).r;
+  // coarse distant terrain LODs sit a little off the true surface: widen the bias with distance
+  float bias = 0.8 + length(wp - cameraPosition) * 0.0045;
+  return smoothstep(-2.0, 3.0, wp.y + bias - sh);
+}
 // thin ground mist layer integrated along the view ray (falls off over ~20 m above its base)
 float aMist(vec3 wp, float dist){
   if (uMistA < 0.001) return 0.0;
@@ -70,13 +83,13 @@ let patchedLights = null;
 function lightsChunk() {
   if (patchedLights) return patchedLights;
   let s = THREE.ShaderChunk.lights_fragment_begin;
-  s = 'float aCloudShadow = aCloudShadowAt((uInvView * vec4(-vViewPosition, 1.0)).xz);\nvec3 aSunDirect = vec3(0.0);\n' + s;
+  s = 'vec3 aLWP = (uInvView * vec4(-vViewPosition, 1.0)).xyz;\nfloat aCloudShadow = aCloudShadowAt(aLWP.xz);\nfloat aTerrShadow = aTerrainShadowAt(aLWP);\nvec3 aSunDirect = vec3(0.0);\n' + s;
   const a = s.indexOf('getDirectionalLightInfo( directionalLight, directLight );');
   const b = s.indexOf('RE_Direct(', a);
   if (a >= 0 && b > a) {
     s = s.slice(0, a) + 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= aCloudShadow;' +
       s.slice(a + 'getDirectionalLightInfo( directionalLight, directLight );'.length, b) +
-      '#if ( UNROLLED_LOOP_INDEX == 0 )\n\t\taSunDirect = directLight.color;\n\t\t#endif\n\t\t' + s.slice(b);
+      '#if ( UNROLLED_LOOP_INDEX == 0 )\n\t\tdirectLight.color *= aTerrShadow;\n\t\taSunDirect = directLight.color;\n\t\t#endif\n\t\t' + s.slice(b);
   }
   patchedLights = s;
   return s;

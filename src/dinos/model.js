@@ -1,6 +1,7 @@
 // Procedural, skinned dinosaur models. Each species is generated from anatomical parameters:
 // a swept body along a spine curve, jointed legs/arms, and species features (horns, frills, sails, plates...).
 import * as THREE from 'three';
+import { TerrainTextures } from '../world/materials.js';
 import { atmospherePatch, TRANSLUCENCY } from '../world/atmosphere.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLSL_NOISE, U } from '../world/shaderlib.js';
@@ -143,6 +144,32 @@ function tube(points, radial = 10, ringsPerSeg = 3, flatten = 1) {
 }
 
 // Flat double-faced polygon (plates, frills, sails). verts: array of Vector3 forming a fan around verts[0]
+// Thick curved plate (frills, plates): the outline fan extruded along the plate normal, thicker at
+// the centre than at the rim, so it catches light and casts proper shadows
+function slab(verts, normal, thick) {
+  const n = verts.length;
+  const c = verts[0];
+  let rmax = 0;
+  for (const v of verts) rmax = Math.max(rmax, v.distanceTo(c));
+  const pos = [];
+  for (const side of [1, -1]) {
+    for (const v of verts) {
+      const t = 1 - Math.min(1, v.distanceTo(c) / Math.max(rmax, 1e-4));
+      const th = thick * (0.35 + 0.65 * t) * 0.5 * side;
+      pos.push(v.x + normal.x * th, v.y + normal.y * th, v.z + normal.z * th);
+    }
+  }
+  const idx = [];
+  for (let i = 1; i < n - 1; i++) { idx.push(0, i, i + 1); idx.push(n, n + i + 1, n + i); }
+  for (let i = 1; i < n - 1; i++) { const a = i, b = i + 1, a2 = n + i, b2 = n + i + 1; idx.push(a, a2, b, b, a2, b2); }
+  idx.push(0, n, 1, 1, n, n + 1); idx.push(n - 1, n + n - 1, 0, 0, n + n - 1, n);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 function fan(verts) {
   const pos = [];
   for (const v of verts) pos.push(v.x, v.y, v.z);
@@ -308,8 +335,11 @@ function buildWalker(spec) {
   // ----- Body sweep -----
   const parts = [];
   const RINGS = Math.max(70, Math.round(total / (spec.length / 90)));
-  const RAD = 16;
+  const RAD = 24;
   const pos = [], idx = [], ringArc = [], ringInfo = [];
+  // anatomical regions along the arc, for muscle definition in the cross-section
+  const chestArcA = arcs[chestKey], headArcA = arcs[headKeyStart];
+  const smoothK = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
   for (let m = 0; m <= RINGS; m++) {
     const a = (m / RINGS) * total;
     const s = sampleAt(a);
@@ -325,8 +355,31 @@ function buildWalker(spec) {
       const vr = c >= 0 ? s.rt : s.rb;
       // slightly squarer cross-section for bulk
       const sq = 1 + 0.08 * Math.pow(Math.sin(2 * ang), 2);
-      const x = sn * s.rw * sq;
-      const up = c * vr * sq;
+      const dTop = Math.min(ang, Math.PI * 2 - ang), dBot = Math.abs(ang - Math.PI);
+      const dorsal = Math.exp(-dTop * dTop * 14), ventral = Math.exp(-dBot * dBot * 10);
+      let xs = 1, upAdd = 0;
+      if (a >= hipArc && a <= chestArcA) {
+        // barrel ribcage at mid-flank, spine ridge, shoulder and hip muscle masses
+        const tT = (a - hipArc) / Math.max(1e-4, chestArcA - hipArc);
+        const rib = Math.sin(Math.PI * tT);
+        xs *= 1 + 0.07 * rib * smoothK(-0.45, 0.35, c) * (1 - Math.max(0, c) * 0.6);
+        const mus = Math.exp(-(((tT - 0.93) / 0.13) ** 2)) + Math.exp(-(((tT - 0.05) / 0.13) ** 2));
+        xs *= 1 + 0.06 * mus * Math.max(0, c + 0.25);
+        upAdd += vr * 0.05 * dorsal;
+      } else if (a < hipArc) {
+        // tail: big caudofemoralis muscles low on the sides at the base, ridge above, chevron keel below
+        const u = a / Math.max(1e-4, hipArc);
+        const base = smoothK(0.45, 1.0, u);
+        xs *= 1 + 0.15 * base * Math.max(0, -c * 1.2 + 0.2);
+        upAdd += vr * (0.07 * dorsal - 0.05 * ventral) * (0.3 + 0.7 * u);
+      } else if (a < headArcA) {
+        // neck: muscular throat and a low dorsal ridge
+        const tN = (a - chestArcA) / Math.max(1e-4, headArcA - chestArcA);
+        xs *= 1 + 0.06 * Math.max(0, -c) * (1 - tN);
+        upAdd += vr * 0.035 * dorsal;
+      }
+      const x = sn * s.rw * sq * xs;
+      const up = c * vr * sq + upAdd;
       pos.push(x, s.y + upY * up, s.z + upZ * up);
       ringArc.push(a);
     }
@@ -414,14 +467,18 @@ function buildWalker(spec) {
     const b1 = addBone(prefix + 'L' + side, b0, K);
     const b2 = addBone(prefix + 'A' + side, b1, A);
     const b3 = addBone(prefix + 'T' + side, b2, T);
+    // quadrupeds stand on thick, columnar limbs (graviportal, like elephants); bipeds taper to
+    // slender shins and bird-like feet
+    const col = !P.biped;
+    const R = col ? [0.98, 1.14, 0.84, 0.74, 0.66, 0.64, 0.56] : [0.95, 1.08, 0.6, 0.46, 0.33, 0.29, 0.14];
     const pts = [
-      { p: j0.clone().add(v3(-Math.sign(j0.x) * thick * 0.2, -thick * 0.15, 0)), r: thick * 0.95 },
-      { p: j0.clone().lerp(K, 0.45), r: thick * 1.08 },
-      { p: K, r: thick * 0.6 },
-      { p: K.clone().lerp(A, 0.5), r: thick * 0.46 },
-      { p: A, r: thick * 0.33 },
-      { p: T, r: thick * 0.29 },
-      { p: F, r: thick * 0.14 },
+      { p: j0.clone().add(v3(-Math.sign(j0.x) * thick * 0.2, -thick * 0.15, 0)), r: thick * R[0] },
+      { p: j0.clone().lerp(K, 0.45), r: thick * R[1] },
+      { p: K, r: thick * R[2] },
+      { p: K.clone().lerp(A, 0.5), r: thick * R[3] },
+      { p: A, r: thick * R[4] },
+      { p: T, r: thick * R[5] },
+      { p: F, r: thick * R[6] },
     ];
     const g = tube(pts, 12, 3);
     const ts = g.userData.ts;
@@ -447,8 +504,20 @@ function buildWalker(spec) {
       const t = Math.min(1, Math.max(0, (j0.y + thick * 0.4 - y) / (mry * 2)));
       o.i[0] = parentBone; o.w[0] = 1 - t; o.i[1] = b0; o.w[1] = t; o.i[2] = o.i[3] = 0; o.w[2] = o.w[3] = 0;
     }));
+    if (col) {
+      // broad padded foot with short blunt nails around its front edge
+      const pad = T.clone().lerp(F, 0.5); pad.y = thick * 0.3;
+      parts.push(finishPart(ellipsoid(pad, thick * 0.78, thick * 0.36, thick * 0.86, 12, 7), [1, 1, 1], 0, rigid(b3)));
+      if (claws) {
+        for (let k = -2; k <= 2; k++) {
+          const a = k * 0.34;
+          const base = pad.clone().add(v3(Math.sin(a) * thick * 0.66, -thick * 0.12, Math.cos(a) * thick * 0.72));
+          parts.push(finishPart(coneAlong(base, v3(Math.sin(a) * 0.5, -0.35, Math.cos(a)), thick * 0.26, thick * 0.17, 6, v3(0, -thick * 0.08, 0)), CLAW, 1, rigid(b3)));
+        }
+      }
+    }
     // toes/claws
-    if (claws) {
+    if (claws && !col) {
       for (const cx of [-1, 0, 1]) {
         const base = F.clone().add(v3(cx * thick * 0.28, 0, -thick * 0.05));
         const dir = v3(cx * 0.3, -0.25, 1);
@@ -523,19 +592,25 @@ function buildWalker(spec) {
     const back = hd.clone().multiplyScalar(-1);
     const upv = hUp.clone().multiplyScalar(Math.sin(a)).addScaledVector(back, Math.cos(a)).normalize();
     const verts = [c.clone().addScaledVector(hd, P.headR * 0.4)];
-    const N = 16;
+    const N = 30;
     for (let k = 0; k <= N; k++) {
       const t = -1.42 + (k / N) * 2.84;
-      const scallop = 1 + 0.07 * Math.cos(k * Math.PI);
+      const scallop = 1 + 0.025 * Math.cos(k * Math.PI * 0.5);
       const p = c.clone().addScaledVector(upv, Math.cos(t) * P.frill.r * scallop).add(v3(Math.sin(t) * P.frill.r * 1.05 * scallop, 0, 0));
       p.addScaledVector(back, Math.pow(Math.abs(Math.sin(t)), 2) * 0.25 * P.frill.r);
       verts.push(p);
     }
-    const g = fan(verts);
-    parts.push(finishPart(g, [1, 1, 1], 2, rigid(head)));
+    // a thick bony shield in the body's own scaly skin, gently dished
+    const nF = v3(1, 0, 0).cross(upv).normalize();
+    for (let k = 1; k < verts.length; k++) {
+      const t = (k - 1) / (verts.length - 2) * 2 - 1;
+      verts[k].addScaledVector(nF, -(1 - t * t) * P.frill.r * 0.12);
+    }
+    const g = slab(verts, nF, P.frill.r * 0.09);
+    parts.push(finishPart(g, [1, 1, 1], 0, rigid(head)));
     // frill epoccipitals (edge knobs)
-    for (let k = 1; k < verts.length; k += 2) {
-      parts.push(finishPart(coneAlong(verts[k], verts[k].clone().sub(c).normalize(), P.frill.r * 0.08, P.frill.r * 0.04, 4), IVORY, 1, rigid(head)));
+    for (let k = 1; k < verts.length; k += 3) {
+      parts.push(finishPart(coneAlong(verts[k], verts[k].clone().sub(c).normalize(), P.frill.r * 0.08, P.frill.r * 0.045, 5), IVORY, 1, rigid(head)));
     }
   }
   if (P.horns) {
@@ -544,6 +619,13 @@ function buildWalker(spec) {
       const dir = hd.clone().multiplyScalar(0.8).addScaledVector(hUp, 0.75).add(v3(side * 0.12, 0, 0)).normalize();
       parts.push(finishPart(coneAlong(base, dir, len, r, 7, hd.clone().multiplyScalar(len * 0.15)), (x, y, z) => IVORY, 1, rigid(head)));
     }
+  }
+  if (P.beak) {
+    // keratin beak: a hooked, parrot-like rostral sheathing the snout tip
+    const hr = headR(0.9);
+    const base = headPt(P.headLen * 0.86, hr.rt * 0.05, 0);
+    const dir = hd.clone().multiplyScalar(0.75).addScaledVector(hUp, -0.66).normalize();
+    parts.push(finishPart(coneAlong(base, dir, P.snoutR * 1.25, P.snoutR * 0.62, 9, hUp.clone().multiplyScalar(-P.snoutR * 0.35)), [0.2, 0.17, 0.14], 1, rigid(head)));
   }
   if (P.noseHorn) {
     const hr = headR(0.82);
@@ -921,6 +1003,9 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
     uIris: { value: predator ? new THREE.Color(0.62, 0.36, 0.04) : new THREE.Color(0.2, 0.11, 0.04) },
     uSlit: { value: predator ? 1 : 0 },
     uBlink: { value: 0 },
+    uSkinNH: { get value() { return TerrainTextures.skinNH; } },
+    uSkinAO: { get value() { return TerrainTextures.skinAO; } },
+    uSkinOK: TerrainTextures.skinOK,
   };
   m.userData.uniforms = uni;
   m.onBeforeCompile = (shader) => {
@@ -936,7 +1021,26 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
         varying vec3 vBind; varying vec3 vBindN; varying float vMat;
         uniform vec3 uBase; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uDisplay;
         uniform int uPatType; uniform float uPatScale; uniform float uWet; uniform float uHurt; uniform float uSkinF; uniform float uLowH; uniform vec3 uIris; uniform float uSlit; uniform float uBlink;
+        uniform sampler2D uSkinNH; uniform sampler2D uSkinAO; uniform float uSkinOK;
         ${GLSL_NOISE}
+        // Scale detail texture, triplanar in bind space. Returns the bind-space gradient of the
+        // scale relief (for derivative bump mapping) and occlusion / tint / tubercle terms.
+        void skinDetail(vec3 p, vec3 n, float f, vec3 dpx, vec3 dpy, out vec3 g, out vec3 aux, out float h){
+          vec3 w = pow(abs(n), vec3(4.0)); w /= (w.x + w.y + w.z);
+          vec3 sg = step(0.0, n) * 2.0 - 1.0;
+          vec2 uX = vec2(p.z * sg.x, p.y) * f, uY = vec2(p.x * sg.y, p.z) * f, uZ = vec2(-p.x * sg.z, p.y) * f;
+          vec2 gxX = vec2(dpx.z * sg.x, dpx.y) * f, gyX = vec2(dpy.z * sg.x, dpy.y) * f;
+          vec2 gxY = vec2(dpx.x * sg.y, dpx.z) * f, gyY = vec2(dpy.x * sg.y, dpy.z) * f;
+          vec2 gxZ = vec2(-dpx.x * sg.z, dpx.y) * f, gyZ = vec2(-dpy.x * sg.z, dpy.y) * f;
+          vec4 tX = textureGrad(uSkinNH, uX, gxX, gyX), tY = textureGrad(uSkinNH, uY, gxY, gyY), tZ = textureGrad(uSkinNH, uZ, gxZ, gyZ);
+          aux = textureGrad(uSkinAO, uX, gxX, gyX).rgb * w.x + textureGrad(uSkinAO, uY, gxY, gyY).rgb * w.y + textureGrad(uSkinAO, uZ, gxZ, gyZ).rgb * w.z;
+          h = tX.b * w.x + tY.b * w.y + tZ.b * w.z;
+          // slope in texture space -> bind-space height gradient (relief ~ a quarter of a scale)
+          vec2 sX = -(tX.rg * 2.0 - 1.0), sY = -(tY.rg * 2.0 - 1.0), sZ = -(tZ.rg * 2.0 - 1.0);
+          float k = 0.45;
+          g = w.x * vec3(0.0, sX.y, sX.x * sg.x) + w.y * vec3(sY.x * sg.y, 0.0, sY.y) + w.z * vec3(-sZ.x * sg.z, sZ.y, 0.0);
+          g *= k;
+        }
         float tri3(vec3 p){ return (vnoise(p.zy) + vnoise(p.xz + 7.1) + vnoise(p.xy + 3.7)) / 3.0; }
         vec2 sh22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
         // cellular scale edge distance (0 at the groove between two scales)
@@ -965,7 +1069,10 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
         // individual scales: larger and pebbled along the back, finer on the belly
         float scF = uSkinF * mix(2.6, 1.8, smoothstep(-0.3, 0.6, vBindN.y));
         float aaS = 1.0 - smoothstep(0.1, 0.26, pxF * scF / uSkinF);
-        float scE = vMat < 0.5 && aaS > 0.0 ? scales3(vBind * scF, vBindN) : 0.5;
+        vec3 bdx = dFdx(vBind), bdy = dFdy(vBind);
+        vec3 skG = vec3(0.0), skA = vec3(1.0, 0.5, 0.0); float skH = 0.5;
+        if (uSkinOK > 0.5) skinDetail(vBind, vBindN, scF / 19.0, bdx, bdy, skG, skA, skH);
+        float scE = vMat < 0.5 && aaS > 0.0 && uSkinOK < 0.5 ? scales3(vBind * scF, vBindN) : 0.5;
         if (vMat < 0.5) {
           col = mix(uBelly, uBase, top);
           float s = uPatScale;
@@ -994,7 +1101,11 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
           }
           col = mix(col, uPattern, pat * (uPatType == 0 ? 0.92 : 0.85));
           col *= 0.86 + 0.24 * scaleN;
-          col *= mix(1.0, 0.8 + 0.2 * smoothstep(0.0, 0.14, scE), aaS);
+          if (uSkinOK > 0.5) {
+            // crevices between scales, slightly varied scale tones, worn pale tubercle tips
+            col *= (0.5 + 0.5 * skA.r) * (1.0 + (skA.g - 0.5) * 0.3);
+            col = mix(col, col * 1.2 + vec3(0.015), skA.b * 0.25);
+          } else col *= mix(1.0, 0.8 + 0.2 * smoothstep(0.0, 0.14, scE), aaS);
           // dried mud caked on the feet and lower legs, splashed up the belly
           float mudN = fbm3(vBind.xz * 3.0 + vBind.y * 2.0);
           float mud = smoothstep(uLowH * (0.9 + 0.6 * mudN), 0.0, vBind.y) * 0.85;
@@ -1037,7 +1148,8 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor = vMat > 2.5 ? 0.03 : (vMat > 0.5 && vMat < 1.5 ? 0.5 : roughnessFactor);
         roughnessFactor = mix(roughnessFactor, 0.35, uWet * 0.8);
-        roughnessFactor *= 0.85 + 0.3 * scaleN;`)
+        roughnessFactor *= 0.85 + 0.3 * scaleN;
+        if (vMat < 0.5 && uSkinOK > 0.5) roughnessFactor *= mix(1.12, 0.82, skH);`)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         if (vMat < 0.5) {
           float pxB = length(fwidth(vBind)) * uSkinF;
@@ -1045,10 +1157,18 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
           // skin folds and wrinkles running around the body
           float fold = sin(vBind.z * uSkinF * 1.1 + vnoise(vBind.xy * uSkinF * 0.35) * 4.0);
           hb += pow(abs(fold), 6.0) * 0.6 * (1.0 - smoothstep(0.2, 0.5, pxB * 1.1));
-          hb += sqrt(smoothstep(0.0, 0.22, scE)) * 0.55 * aaS;
+          if (uSkinOK < 0.5) hb += sqrt(smoothstep(0.0, 0.22, scE)) * 0.55 * aaS;
           float bumpK = 1.0;
           vec3 dpdx = dFdx(-vViewPosition), dpdy = dFdy(-vViewPosition);
           float dhx = dFdx(hb), dhy = dFdy(hb);
+          if (uSkinOK > 0.5) {
+            // chain rule: bind-space relief gradient times the bind position's screen derivatives,
+            // rescaled from bind units to view units
+            float bs = sqrt(max(dot(dpdx, dpdx), 1e-12) / max(dot(bdx, bdx), 1e-12));
+            float fadeT = 1.0 - smoothstep(0.5, 1.4, length(fwidth(vBind)) * scF / 19.0 * 32.0);
+            dhx += dot(skG, bdx) * bs / 0.011 * fadeT;
+            dhy += dot(skG, bdy) * bs / 0.011 * fadeT;
+          }
           vec3 r1 = cross(dpdy, normal), r2 = cross(normal, dpdx);
           float det = dot(dpdx, r1);
           vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
@@ -1056,7 +1176,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
           if (dot(nb, nb) > 1e-20) normal = normalize(nb);
         }`);
   };
-  m.customProgramCacheKey = () => 'dinoskin-v4';
+  m.customProgramCacheKey = () => 'dinoskin-v5';
   { const _obc = m.onBeforeCompile; m.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n if (vMat > 1.5 && vMat < 2.5) { vec3 tSunV = normalize((viewMatrix * vec4(uSunDirA, 0.0)).xyz); reflectedLight.directDiffuse += diffuseColor.rgb * aSunDirect * pow(max(dot(normalize(-vViewPosition), tSunV), 0.0), 2.0) * 0.9; }'); }; }
   return m;
 }
