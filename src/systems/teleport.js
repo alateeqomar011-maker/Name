@@ -227,7 +227,8 @@ registerLocation({
     let s = search(g, { cx: R.x, cz: R.z, r: 380, seed: 71, tries: 4000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.9 && w.getVeg(x, z) < 0.35 && !!waterYaw(w, x, z, 30),
       score: (x, z) => (waterYaw(w, x, z, 30) || { n: 0 }).n - w.getVeg(x, z) * 10 });
     // fallback: any open patch of marsh near standing water
-    if (!s) s = search(g, { cx: R.x, cz: R.z, r: 480, seed: 72, tries: 5000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.85 && w.getVeg(x, z) < 0.6, score: (x, z) => (waterYaw(w, x, z, 40) || { n: 0 }).n - w.getVeg(x, z) * 4 });
+    if (!s) s = search(g, { cx: R.x, cz: R.z, r: 420, seed: 72, tries: 5000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.85 && h < 6 && w.getVeg(x, z) < 0.6,
+      score: (x, z) => (waterYaw(w, x, z, 40) || { n: 0 }).n * 0.4 - Math.abs(w.getVeg(x, z) - 0.3) * 4 - Math.hypot(x - R.x, z - R.z) / 60 });
     if (!s) return null;
     const wy = waterYaw(w, s.x, s.z, 30);
     return { x: s.x, z: s.z, yaw: wy ? wy.yaw : 0, pitch: 0 };
@@ -312,7 +313,12 @@ function landmarkView(g, p, { rMin = 26, rMax = 55, seed = 1, lookUp = 6, hour }
   const ty = w.getHeight(p.x, p.z) + lookUp;
   const s = search(g, { cx: p.x, cz: p.z, r: rMax, rMin, seed, tries: 3000,
     accept: (x, z, h, b, n) => n.y > 0.88 && clearView(w, x, z, h + 1.7, p.x, p.z, ty),
-    score: (x, z, h) => -flatness(w, x, z, h, 4) - Math.abs(Math.hypot(x - p.x, z - p.z) - (rMin + rMax) / 2) * 0.05 });
+    // prefer clearings with little vegetation between the viewer and the landmark
+    score: (x, z, h) => {
+      let veg = w.getVeg(x, z) * 2;
+      for (let i = 1; i < 6; i++) { const t = i / 6; veg += w.getVeg(x + (p.x - x) * t * 0.8, z + (p.z - z) * t * 0.8); }
+      return -flatness(w, x, z, h, 4) - Math.abs(Math.hypot(x - p.x, z - p.z) - (rMin + rMax) / 2) * 0.05 - veg * 3;
+    } });
   if (!s) return null;
   const d = Math.hypot(p.x - s.x, p.z - s.z);
   return { x: s.x, z: s.z, yaw: face(s.x, s.z, p.x, p.z), pitch: Math.max(-0.15, Math.min(0.18, Math.atan2(ty - (s.h + 1.7), d) * 0.8)) };
@@ -460,6 +466,15 @@ registerLocation({
 });
 
 // ------------------------------------------------------------------------------------------------
+// atlas filter groups
+const CATS = [['all', 'All'], ['wild', 'Wild Places'], ['ruins', 'Ruins & Caves'], ['peaks', 'Peaks & Lookouts'], ['coast', 'Islands & Coast']];
+const CAT_OF = {
+  volcano: 'peaks', beach: 'coast', dinos: 'wild', mountains: 'peaks', forest: 'wild', waterfall: 'wild', desert: 'wild', jungle: 'wild',
+  swamp: 'wild', plains: 'wild', summit: 'peaks', meadows: 'wild', island: 'coast', camp: 'wild', temple: 'ruins', circle: 'ruins',
+  pillars: 'ruins', shrine: 'ruins', grotto: 'ruins', pinecrest: 'peaks', elder: 'wild', sentinel: 'peaks', mesa: 'peaks', ember: 'wild',
+  coralkey: 'coast', gullrock: 'coast', atoll: 'coast', river: 'wild',
+};
+const catOf = (l) => l.cat || CAT_OF[l.id] || 'wild';
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const SEASONS = [
   { id: 'summer', icon: '☀️', name: 'Summer', desc: 'Long golden days, lush green growth, warm hazy light.' },
@@ -528,8 +543,9 @@ export class Teleporter {
           <button class="tv-close" title="Close">✕</button>
         </header>
         <section class="tv-tab" data-tab="travel">
+          <div class="tv-cats">${CATS.map(([id, n]) => `<button data-cat="${id}" class="${id === 'all' ? 'on' : ''}">${n} <small>${id === 'all' ? LOCATIONS.length : LOCATIONS.filter((l) => catOf(l) === id).length}</small></button>`).join('')}</div>
           <div class="tv-grid">${LOCATIONS.map((l) => `
-            <article class="tv-card" data-id="${esc(l.id)}">
+            <article class="tv-card" data-id="${esc(l.id)}" data-cat="${catOf(l)}">
               <div class="tv-img"><img alt=""><div class="tv-tag">${esc(l.tag)}</div></div>
               <div class="tv-body">
                 <h3><span>${l.icon}</span> ${esc(l.name)}</h3>
@@ -558,6 +574,12 @@ export class Teleporter {
     for (const b of el.querySelectorAll('nav button')) b.onclick = () => setTab(b.dataset.tab);
     el.querySelector('.tv-close').onclick = () => this.close();
     el.addEventListener('pointerdown', (e) => { if (e.target === el) this.close(); });
+    for (const b of el.querySelectorAll('.tv-cats button')) {
+      b.onclick = () => {
+        for (const o of el.querySelectorAll('.tv-cats button')) o.classList.toggle('on', o === b);
+        for (const c of el.querySelectorAll('.tv-card')) c.style.display = b.dataset.cat === 'all' || c.dataset.cat === b.dataset.cat ? '' : 'none';
+      };
+    }
     for (const card of el.querySelectorAll('.tv-card')) {
       const loc = LOCATIONS.find((l) => l.id === card.dataset.id);
       this._preview(loc, card.querySelector('img'));

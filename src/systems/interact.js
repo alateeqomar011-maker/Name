@@ -25,6 +25,7 @@ export class Interaction {
     const inv = this.game.inventory;
     const gs = 1 - 0.08 * this.game.progress.skill('gathering');
     if (it.kind === 'tree') return [4.2, 2.2, 1.3, 0.75][inv.toolTier('axe')] * Math.min(1.6, 0.6 + it.scale * 0.5) * gs;
+    if (it.kind === 'log') return [3.0, 1.6, 1.0, 0.6][inv.toolTier('axe')] * gs;
     if (it.kind === 'rock') return [3.0, 1.6, 1.0, 0.6][inv.toolTier('pick')] * gs;
     if (it.kind === 'ore') return [99, 2.4, 1.4, 0.8][inv.toolTier('pick')] * gs;
     return 0.8 * gs;
@@ -100,7 +101,7 @@ export class Interaction {
         g.player.action = 0.3;
         if (cur.node && Math.random() < dt * 3) {
           const it = cur.node;
-          if (it.kind === 'tree') { g.audio.play('chop', { pos: new THREE.Vector3(it.x, it.y + 1, it.z) }); g.fx.chips(new THREE.Vector3(it.x, it.y + 1.2, it.z), [0.6, 0.45, 0.3]); }
+          if (it.kind === 'tree' || it.kind === 'log') { g.audio.play('chop', { pos: new THREE.Vector3(it.x, it.y + 1, it.z) }); g.fx.chips(new THREE.Vector3(it.x, it.y + 1.2, it.z), [0.6, 0.45, 0.3]); }
           else if (it.kind === 'rock' || it.kind === 'ore') { g.audio.play('mine', { pos: new THREE.Vector3(it.x, it.y + 0.5, it.z) }); g.fx.chips(new THREE.Vector3(it.x, it.y + 0.6, it.z), [0.5, 0.5, 0.5]); }
           else g.audio.play('rustle');
         }

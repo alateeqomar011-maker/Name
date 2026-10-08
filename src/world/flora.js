@@ -803,6 +803,70 @@ export function rockGeometry(seed, detail = 3, squash = 0.7, ore = false) {
   return g;
 }
 
+// Fallen log: a broken, slightly bowed trunk lying on the ground with snapped branch stubs, a
+// splintered end, moss along the top and a few ferns sprouting beside it
+function fallenLog(seed) {
+  const rand = mulberry32(seed);
+  const trunk = new GeoBuilder(), leaves = new GeoBuilder();
+  const L = 4.5 + rand() * 4, R = 0.32 + rand() * 0.22;
+  const bark = lin(0.58, 0.52, 0.46), mossy = lin(0.42, 0.5, 0.3);
+  const pts = [], rads = [], sw = [];
+  for (let i = 0; i <= 4; i++) {
+    const t = i / 4;
+    pts.push(V3((t - 0.5) * L, R * 0.85 - Math.sin(t * Math.PI) * 0.06, Math.sin(t * 2.4 + seed) * 0.15));
+    rads.push(R * (1.08 - t * 0.3));
+    sw.push(0);
+  }
+  trunk.tubePath(pts, rads, 10, bark, sw, 0.22, 2);
+  // moss strip along the top
+  trunk.tubePath(pts.map((p) => p.clone().add(V3(0, R * 0.62, 0))), rads.map((r) => r * 0.5), 8, mossy, sw, 0.22, 1);
+  // snapped branch stubs
+  for (let k = 0; k < 4; k++) {
+    const t = 0.2 + rand() * 0.65;
+    const p = V3((t - 0.5) * L, R * 0.9, 0);
+    const d = V3((rand() - 0.5) * 0.6, 0.5 + rand() * 0.6, (rand() < 0.5 ? -1 : 1) * (0.5 + rand() * 0.5)).normalize();
+    trunk.cylinder(p, p.clone().addScaledVector(d, 0.35 + rand() * 0.5), R * 0.28, R * 0.12, 5, bark, 0, 0, 0.3);
+  }
+  // splintered root end: a flared crown of short broken roots
+  const re = V3(-L * 0.5, R * 0.85, 0);
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + rand() * 0.4;
+    const d = V3(-0.5, Math.cos(a), Math.sin(a)).normalize();
+    trunk.cylinder(re, re.clone().addScaledVector(d, R * (1.4 + rand())), R * 0.32, R * 0.06, 4, bark, 0, 0, 0.3);
+  }
+  // ferns and moss tufts growing along it
+  for (let k = 0; k < 5; k++) {
+    const x = (rand() - 0.5) * L * 0.9, side = rand() < 0.5 ? -1 : 1;
+    const c = V3(x, 0.32, side * (R + 0.25));
+    leaves.card(c, V3(0.4, 0, 0), V3(0, 0.38, side * 0.12), rand() < 0.6 ? TILES.FERN : TILES.MOSS, [0.5, 0.62, 0.32], 0.25, V3(x, 0, side * R));
+  }
+  return { trunk: trunk.build(), leaves: leaves.build(), radius: R + 0.15, height: R * 2 };
+}
+
+// Old stump: a short jagged trunk with buttress roots, sometimes hollow-topped
+function stump(seed) {
+  const rand = mulberry32(seed);
+  const trunk = new GeoBuilder(), leaves = new GeoBuilder();
+  const R = 0.4 + rand() * 0.25, H = 0.5 + rand() * 0.6;
+  const bark = lin(0.56, 0.5, 0.44), wood = lin(0.62, 0.5, 0.36);
+  trunk.cylinder(V3(0, -0.3, 0), V3(0, H, 0), R * 1.1, R, 10, bark, 0, 0, 0.25, 2);
+  // jagged broken top: splinters around the rim
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * Math.PI * 2 + rand() * 0.3;
+    const p = V3(Math.cos(a) * R * 0.75, H, Math.sin(a) * R * 0.75);
+    trunk.cylinder(p, p.clone().add(V3(0, 0.1 + rand() * 0.35, 0)), R * 0.22, 0.01, 4, k % 2 ? wood : bark, 0, 0, 0.3);
+  }
+  trunk.cylinder(V3(0, H - 0.02, 0), V3(0, H + 0.01, 0), R * 0.86, R * 0.86, 10, wood, 0, 0, 0.3);
+  // buttress roots
+  for (let k = 0; k < 5; k++) {
+    const a = (k / 5) * Math.PI * 2 + rand() * 0.5;
+    const p0 = V3(Math.cos(a) * R * 0.6, H * 0.45, Math.sin(a) * R * 0.6);
+    trunk.cylinder(p0, V3(Math.cos(a) * R * 2.0, -0.1, Math.sin(a) * R * 2.0), R * 0.34, R * 0.08, 5, bark, 0, 0, 0.3);
+  }
+  leaves.card(V3(R * 0.8, 0.25, 0), V3(0.3, 0, 0), V3(0, 0.3, 0), TILES.MOSS, [0.5, 0.6, 0.3], 0.2, V3(0, 0, 0));
+  return { trunk: trunk.build(), leaves: leaves.build(), radius: R * 1.1, height: H };
+}
+
 // Boulders: photographed rock in world-space triplanar projection. The rock type follows the
 // ground it sits on (granite, desert sandstone, volcanic basalt, wet coastal rock), damp forests
 // grow moss over the tops and winter settles snow into the upper faces.
@@ -902,6 +966,7 @@ export class FloraLibrary {
       treefern: treeFern(51), cypress: cypress(61), araucaria: araucaria(71), dead: deadTree(81), cycad: cycad(91),
       fern: fernBush(101), shrub: shrub(111), berry: shrub(121, TILES.BERRY), horsetail: horsetail(131), scrub: scrub(141),
       jungleshrub: shrub(151, TILES.JUNGLE),
+      log: fallenLog(161), log2: fallenLog(162), stump: stump(171), stump2: stump(172),
     };
     this.rocks = [rockGeometry(1, 3, 0.75), rockGeometry(2, 3, 0.6), rockGeometry(3, 2, 0.9)];
     this.oreRock = rockGeometry(9, 3, 0.8, true);

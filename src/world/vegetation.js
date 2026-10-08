@@ -54,6 +54,7 @@ const RESOURCE_OF = {
   oak: 'wood', oak2: 'wood', conifer: 'wood', conifer2: 'wood', kapok: 'wood', palm: 'wood', palm2: 'wood', treefern: 'wood',
   cypress: 'wood', araucaria: 'wood', dead: 'wood', cycad: 'fiber', fern: 'fiber', shrub: 'fiber', jungleshrub: 'fiber',
   berry: 'berries', horsetail: 'fiber', scrub: 'fiber', rock: 'stone', ore: 'ore',
+  log: 'wood', log2: 'wood', stump: 'wood', stump2: 'wood',
 };
 
 function pick(set, r) {
@@ -373,6 +374,28 @@ export class Vegetation {
         });
       }
     }
+    // deadwood: fallen logs and old stumps on forest floors
+    const dsp = 16;
+    for (let gz = 0; gz < CELL / dsp; gz++) {
+      for (let gx = 0; gx < CELL / dsp; gx++) {
+        idx++;
+        const x = x0 + (gx + rand()) * dsp, z = z0 + (gz + rand()) * dsp;
+        const r1 = rand(), r2 = rand(), r3 = rand();
+        const b = W.getBiome(x, z);
+        const p = b === BIOME.FOREST ? 0.2 : b === BIOME.PINEFOREST ? 0.18 : b === BIOME.JUNGLE ? 0.14 : b === BIOME.SWAMP ? 0.1 : b === BIOME.GRASSLAND ? 0.012 : 0;
+        if (r1 > p * (0.5 + W.getVeg(x, z))) continue;
+        const h = W.getHeight(x, z);
+        if (h < 0.5 || W.waterLevelAt(x, z) > h - 0.2) continue;
+        const n = W.getNormal(x, z, _p);
+        if (n.y < 0.86 || this._excluded(x, z)) continue;
+        const isLog = r2 < 0.62;
+        const t = r3 * 0.25 + 0.85;
+        placements.push({
+          type: isLog ? (r3 < 0.5 ? 'log' : 'log2') : (r3 < 0.5 ? 'stump' : 'stump2'), kind: 'log', idx, x, y: h - 0.08, z,
+          rot: r2 * 40, scale: 0.85 + r3 * 0.35, tilt: isLog ? (n.x + n.z) * 0.2 : 0, tint: [t, t * 0.97, t * 0.92], btint: t,
+        });
+      }
+    }
     cell.trees = this._makeLayer(cell, placements, false);
     return cell;
   }
@@ -444,7 +467,7 @@ export class Vegetation {
     this.forEachNear(pos.x, pos.z, r + 6, (it) => {
       if (!it.alive || it.radius < 0.25) return;
       const bush = (it.kind === 'plant' || it.kind === 'bush') && it.radius >= 0.3;
-      if (treesOnly ? it.kind === 'tree' : (it.kind === 'tree' || it.kind === 'rock' || it.kind === 'ore' || bush)) {
+      if (treesOnly ? it.kind === 'tree' : (it.kind === 'tree' || it.kind === 'rock' || it.kind === 'ore' || it.kind === 'log' || bush)) {
         if (yFeet !== null && it.kind !== 'tree' && yFeet > it.y + it.scale * 0.9) return;
         const rr = (it.kind === 'tree' ? it.radius * 0.9 : bush ? it.radius * 0.8 : it.radius) + r;
         const dx = pos.x - it.x, dz = pos.z - it.z;
