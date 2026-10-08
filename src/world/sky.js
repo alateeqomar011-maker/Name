@@ -11,11 +11,123 @@ void main(){
   gl_Position = p.xyww;
 }`;
 
+// Ray-marched cumulus layer (1.5-4.2 km), rendered at half resolution into its own target and
+// composited by the sky shader. Weather map -> coverage and tower height; Perlin-Worley base
+// shapes eroded by Worley detail (wispy bases, cauliflower tops); Beer-Lambert with a
+// multiple-scattering lobe, "powder" darkening, dual-lobe phase for the silver lining.
+const cloudFrag = /* glsl */ `
+uniform vec3 uSunDir; uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunColor;
+uniform float uCloudCover; uniform float uCloudDark; uniform float uTime; uniform float uNight;
+uniform vec2 uCloudOffset; uniform highp sampler3D uCloudShape; uniform sampler2D uCloudWeather;
+uniform float uSteps; uniform vec3 uCamPos;
+uniform sampler2D uHist; uniform mat4 uPrevVP; uniform float uFrame; uniform float uHistW; uniform vec2 uCRes;
+varying vec3 vDir;
+const float CB = 1500.0, CT = 4200.0;
+float remap(float v, float a, float b, float c, float d) { return c + (v - a) / (b - a) * (d - c); }
+float hg(float mu, float g) { float g2 = g * g; return (1.0 - g2) / pow(1.0 + g2 - 2.0 * g * mu, 1.5); }
+float cloudD(vec3 p, bool detail) {
+  float h = (p.y - CB) / (CT - CB);
+  if (h <= 0.0 || h >= 1.0) return 0.0;
+  vec2 drift = uCloudOffset * 2600.0;
+  vec3 wp = p + vec3(drift.x, 0.0, drift.y);
+  vec4 w = texture(uCloudWeather, wp.xz / 32000.0);
+  // fair weather: scattered fields with blue gaps; overcast: an unbroken deck
+  float wr = clamp(remap(w.r, 0.35, 0.68, 0.0, 1.0), 0.0, 1.0);
+  float c0 = 1.0 - uCloudCover * 1.3;
+  float cov = smoothstep(c0 - 0.1, c0 + 0.25, wr);
+  float tg = clamp(remap(w.g, 0.4, 0.85, 0.0, 1.0), 0.0, 1.0);
+  float top = mix(0.3, 1.0, tg) * (0.5 + 0.5 * cov);
+  float prof = smoothstep(0.0, 0.07, h) * (1.0 - smoothstep(top * 0.4, top, h));
+  float base = clamp(remap(texture(uCloudShape, wp / 9000.0).r, 0.5, 0.85, 0.0, 1.0), 0.0, 1.0);
+  float s = clamp(remap(base * prof, 1.0 - cov, 1.0, 0.0, 1.0), 0.0, 1.0);
+  if (s <= 0.0 || !detail) return s;
+  vec2 dn = texture(uCloudShape, wp / 1600.0 + vec3(0.0, uTime * 0.0015, 0.0)).gb;
+  float det = clamp(remap(dn.x * 0.62 + dn.y * 0.38, 0.3, 0.65, 0.0, 1.0), 0.0, 1.0);
+  // wispy, torn bases; billowing turrets higher up
+  det = mix(det, 1.0 - det, clamp(h * 7.0, 0.0, 1.0));
+  return clamp(remap(s, det * 0.42, 1.0, 0.0, 1.0), 0.0, 1.0);
+}
+void main() {
+  vec3 rd = normalize(vDir);
+  vec4 res = vec4(0.0, 0.0, 0.0, 1.0);
+  if (rd.y > 0.01) {
+    vec3 ro = vec3(uCamPos.x, max(uCamPos.y, 0.0), uCamPos.z);
+    float t0 = max((CB - ro.y) / rd.y, 0.0), t1 = (CT - ro.y) / rd.y;
+    float tEnd = min(t1, t0 + 13000.0);
+    if (t0 < 70000.0) {
+      int N = int(uSteps);
+      float dt = (tEnd - t0) / uSteps;
+      // the dither moves every frame; the history blend below integrates it into smooth clouds
+      float jit = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))) + uFrame * 0.61803);
+      float t = t0 + dt * jit;
+      vec3 L = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.04), uSunDir.z));
+      float mu = dot(rd, L);
+      float ph = mix(hg(mu, 0.72), hg(mu, -0.22), 0.42) + hg(mu, 0.96) * 0.06;
+      vec3 sunC = uSunColor * mix(1.7, 0.03, uNight) * (1.0 - uCloudDark * 0.75);
+      vec3 ambT = (uZenith * 0.75 + uHorizon * 0.45) * mix(1.0, 0.12, uNight);
+      vec3 ambB = (uHorizon * 0.22 + uZenith * 0.08) * mix(1.0, 0.12, uNight);
+      float T = 1.0, tHit = -1.0;
+      vec3 S = vec3(0.0);
+      const float SIG = 0.016;
+      // adaptive march: coarse cheap steps through clear air, back up and refine inside cloud
+      float dtF = dt * 0.34;
+      bool fine = false;
+      int miss = 0, budget = N * 3;
+      for (int i = 0; i < 160; i++) {
+        if (i >= budget || T < 0.015 || t > tEnd) break;
+        vec3 p = ro + rd * t;
+        if (!fine) {
+          if (cloudD(p, false) > 0.0) { fine = true; miss = 0; t = max(t0, t - dt * 0.66); continue; }
+          t += dt;
+          continue;
+        }
+        float d = cloudD(p, true);
+        if (d > 0.003) {
+          miss = 0;
+          if (tHit < 0.0) tHit = t;
+          float od = 0.0, ls = 55.0;
+          vec3 lp = p;
+          for (int j = 0; j < 5; j++) { lp += L * ls; od += cloudD(lp, j < 2) * ls; ls *= 1.85; }
+          od *= SIG * 1.7;
+          float beer = exp(-od);
+          float powder = 1.0 - exp(-od * 2.0);
+          float lightT = mix(2.0 * beer * powder, beer, 0.5 + 0.5 * mu) + exp(-od * 0.17) * 0.32;
+          float h = (p.y - CB) / (CT - CB);
+          vec3 lum = sunC * lightT * ph * 0.45 + mix(ambB, ambT, h) * (1.0 - uCloudDark * 0.55);
+          lum = mix(lum, vec3(0.12, 0.13, 0.15) * mix(1.0, 0.15, uNight), uCloudDark * (1.0 - h * 0.6) * 0.7);
+          float st = exp(-d * SIG * 1.15 * dtF);
+          S += T * lum * (1.0 - st);
+          T *= st;
+        } else if (++miss > 5) fine = false;
+        t += dtF;
+      }
+      // aerial perspective: distant decks fade into the horizon haze
+      if (tHit > 0.0) {
+        float haze = 1.0 - exp(-tHit / 26000.0);
+        S = mix(S, uHorizon * (1.0 - T), haze * 0.85);
+        T = mix(T, 1.0, haze * haze * 0.6);
+      }
+      res = vec4(S, T);
+    }
+  }
+  // temporal accumulation: reproject last frame's clouds (the dome only rotates with the view)
+  vec4 pc = uPrevVP * vec4(rd, 0.0);
+  if (uHistW < 1.0 && pc.w > 0.0) {
+    vec2 puv = pc.xy / pc.w * 0.5 + 0.5;
+    if (puv.x > 0.0 && puv.x < 1.0 && puv.y > 0.0 && puv.y < 1.0) {
+      vec4 h = texture2D(uHist, puv);
+      res = mix(h, res, uHistW);
+    }
+  }
+  gl_FragColor = res;
+}`;
+
 const skyFrag = /* glsl */ `
 uniform vec3 uSunDir; uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunColor; uniform vec3 uGlow;
 uniform float uCloudCover; uniform float uCloudDark; uniform float uTime; uniform float uNight; uniform float uFlash;
 uniform float uStars; uniform vec2 uCloudOffset; uniform vec3 uTint;
 uniform float uPhys; uniform float uSkyI; uniform float uMie;
+uniform float uVol; uniform sampler2D uCloudRT; uniform vec2 uRes;
 varying vec3 vDir;
 // single-scattering atmosphere (Rayleigh + Mie + ozone absorption) seen from 300 m above sea level
 const float A_RE = 6360e3, A_RA = 6420e3, A_HR = 7994.0, A_HM = 1200.0;
@@ -109,10 +221,16 @@ void main(){
     float cir = fib * 0.78 + fine * 0.22;
     float cirA = smoothstep(0.5, 0.82, cir) * patchM * smoothstep(0.08, 0.4, y) * (0.4 + 0.3 * (1.0 - uCloudCover)) * (1.0 - uCloudDark);
     vec3 cirC = mix(uHorizon * 1.15 + uSunColor * 0.25, uGlow * 1.2 + uHorizon, pow(sd, 3.0) * 0.6) * mix(1.0, 0.1, uNight);
-    col = mix(col, cirC, cirA * 0.6);
+    col = mix(col, cirC, cirA * (uVol > 0.5 ? 0.38 : 0.6));
   }
-  // volumetric-style cumulus: march through a slab layer with self-shadowing toward the sun
-  if (y > -0.02) {
+  if (uVol > 0.5) {
+    // ray-marched clouds from the half-resolution pass, lightly filtered on the way up
+    vec2 suv = gl_FragCoord.xy / uRes, px = 1.0 / uRes;
+    vec4 c = texture2D(uCloudRT, suv) * 0.6
+      + (texture2D(uCloudRT, suv + vec2(px.x, px.y) * 0.5) + texture2D(uCloudRT, suv - vec2(px.x, px.y) * 0.5)) * 0.2;
+    col = col * c.a + c.rgb;
+  } else if (y > -0.02) {
+    // volumetric-style cumulus: march through a slab layer with self-shadowing toward the sun
     float cov = uCloudCover;
     vec2 sunXZ = normalize(uSunDir.xz + 0.0001) * (0.25 + (1.0 - max(uSunDir.y, 0.0)) * 0.35);
     vec2 base = dir.xz / (y + 0.13) * 1.5;
@@ -207,6 +325,7 @@ export class Sky {
       uNight: U.uNight, uFlash: U.uFlash, uStars: { value: 0 }, uCloudOffset: { value: new THREE.Vector2() },
       uTint: { value: new THREE.Color(1, 1, 1) },
       uPhys: { value: 1 }, uSkyI: { value: 32 }, uMie: { value: 0.4 },
+      uVol: { value: 0 }, uCloudRT: { value: null }, uRes: { value: new THREE.Vector2(1, 1) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag,
@@ -217,6 +336,12 @@ export class Sky {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -10;
     scene.add(this.mesh);
+
+    // Ray-marched clouds: a camera-centred dome drawn into a half-resolution target
+    this.cloudSteps = 0;
+    this.cloudScene = new THREE.Scene();
+    this.cloudMat = null;
+    this.cloudRT = null;
 
     // Env-map scene (only the sky)
     this.envScene = new THREE.Scene();
@@ -354,12 +479,79 @@ export class Sky {
     this.envTimer -= dt;
   }
 
+  // steps = 0 keeps the cheap slab clouds; otherwise ray-march with that many samples per pixel
+  setCloudQuality(steps, textures) {
+    if (textures && !this.cloudMat) {
+      const u = this.uniforms;
+      this.cloudMat = new THREE.ShaderMaterial({
+        uniforms: {
+          uSunDir: u.uSunDir, uZenith: u.uZenith, uHorizon: u.uHorizon, uSunColor: u.uSunColor, uCloudCover: u.uCloudCover,
+          uCloudDark: u.uCloudDark, uTime: u.uTime, uNight: u.uNight, uCloudOffset: u.uCloudOffset,
+          uCloudShape: { value: textures.shape }, uCloudWeather: { value: textures.weather },
+          uSteps: { value: 32 }, uCamPos: { value: new THREE.Vector3() },
+          uHist: { value: null }, uPrevVP: { value: new THREE.Matrix4() }, uFrame: { value: 0 }, uHistW: { value: 1 }, uCRes: { value: new THREE.Vector2() },
+        },
+        vertexShader: skyVert, fragmentShader: cloudFrag, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false,
+      });
+      const m = new THREE.Mesh(new THREE.SphereGeometry(50, 48, 24), this.cloudMat);
+      m.frustumCulled = false;
+      this.cloudMesh = m;
+      this.cloudScene.add(m);
+    }
+    this.cloudSteps = this.cloudMat ? steps : 0;
+    if (this.cloudMat) this.cloudMat.uniforms.uSteps.value = Math.max(8, steps);
+  }
+
+  // half-resolution cloud pass, run before the main scene render
+  renderClouds(renderer, camera) {
+    const on = this.cloudSteps > 0 && this.mesh.visible;
+    this.uniforms.uVol.value = on ? 1 : 0;
+    if (!on) return;
+    const sz = renderer.getDrawingBufferSize(this._sz || (this._sz = new THREE.Vector2()));
+    const w = Math.max(1, Math.ceil(sz.x / 2)), h = Math.max(1, Math.ceil(sz.y / 2));
+    const opts = { type: THREE.HalfFloatType, depthBuffer: false, magFilter: THREE.LinearFilter, minFilter: THREE.LinearFilter };
+    let reset = false;
+    if (!this.cloudRT) { this.cloudRT = new THREE.WebGLRenderTarget(w, h, opts); this.cloudRT2 = new THREE.WebGLRenderTarget(w, h, opts); reset = true; }
+    else if (this.cloudRT.width !== w || this.cloudRT.height !== h) { this.cloudRT.setSize(w, h); this.cloudRT2.setSize(w, h); reset = true; }
+    const cu = this.cloudMat.uniforms;
+    // rotation-only view-projection (the dome is camera-centred), for reprojecting the history
+    const vp = this._vp || (this._vp = new THREE.Matrix4());
+    const rot = this._rot || (this._rot = new THREE.Matrix4());
+    rot.extractRotation(camera.matrixWorldInverse);
+    vp.multiplyMatrices(camera.projectionMatrix, rot);
+    const cut = this._lastCam && this._lastCam.distanceTo(camera.position) > 50;
+    (this._lastCam || (this._lastCam = new THREE.Vector3())).copy(camera.position);
+    cu.uHistW.value = reset || cut || !this._hasHist ? 1 : 0.18;
+    cu.uPrevVP.value.copy(this._prevVP || vp);
+    (this._prevVP || (this._prevVP = new THREE.Matrix4())).copy(vp);
+    cu.uFrame.value = (cu.uFrame.value + 1) % 1000;
+    cu.uHist.value = this.cloudRT2.texture;
+    cu.uCRes.value.set(w, h);
+    this.cloudMesh.position.copy(camera.position);
+    cu.uCamPos.value.copy(camera.position);
+    const prev = renderer.getRenderTarget(), ac = renderer.autoClear;
+    renderer.setRenderTarget(this.cloudRT);
+    renderer.autoClear = false;
+    renderer.render(this.cloudScene, camera);
+    renderer.autoClear = ac;
+    renderer.setRenderTarget(prev);
+    this._hasHist = true;
+    this.uniforms.uCloudRT.value = this.cloudRT.texture;
+    this.uniforms.uRes.value.copy(sz);
+    // ping-pong: this frame's result is next frame's history
+    const t = this.cloudRT; this.cloudRT = this.cloudRT2; this.cloudRT2 = t;
+  }
+
   // Regenerate the image-based lighting from the current sky
   updateEnvironment(force = false) {
     if (!force && this.envTimer > 0) return;
     this.envTimer = 3;
     if (this.envRT) this.envRT.dispose();
+    // the cube faces can't sample the screen-space cloud pass: use the slab clouds for lighting
+    const vol = this.uniforms.uVol.value;
+    this.uniforms.uVol.value = 0;
     this.envRT = this.pmrem.fromScene(this.envScene, 0.04, 0.1, 500);
+    this.uniforms.uVol.value = vol;
     this.scene.environment = this.envRT.texture;
     this.scene.environmentIntensity = 0.55;
   }

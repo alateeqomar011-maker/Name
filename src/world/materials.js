@@ -3,6 +3,7 @@
 // can blend any of them per pixel. Albedo is sRGB with ambient occlusion baked in; the data
 // array holds the tangent normal (rg, "rows go down" convention) and a height map (b).
 import * as THREE from 'three';
+import { makeCloudTextures } from './cloudNoise.js';
 
 export const LAYERS = ['grass', 'grassdry', 'soil', 'gravel', 'trail', 'cracked', 'sand', 'dune', 'snow',
   'rock', 'mossrock', 'sandstone', 'basalt', 'coastrock', 'mossground'];
@@ -167,6 +168,7 @@ export const TerrainTextures = {
   waveArray: null,
   foamMap: null,
   waveOK: { value: 0 },
+  clouds: null, // { shape: Data3DTexture, weather: DataTexture } for the ray-marched clouds
 };
 
 function imageTexture(img, srgb, aniso) {
@@ -231,6 +233,13 @@ export async function loadTerrainTextures(renderer, size = 1024, base = './') {
     TerrainTextures.waveOK.value = 1;
   } catch (e) {
     console.warn('ocean detail unavailable, using procedural ripples', e);
+  }
+  try {
+    const [cs, cw] = await Promise.all([loadImage(base + 'textures/cloud_shape.png'), loadImage(base + 'textures/cloud_weather.png')]);
+    const shape = stripToArray(cs, 64), weather = stripToArray(cw, 128);
+    TerrainTextures.clouds = makeCloudTextures(shape.data, weather.data, 64, 128);
+  } catch (e) {
+    console.warn('cloud volumes unavailable, using slab clouds', e);
   }
   return TerrainTextures;
 }

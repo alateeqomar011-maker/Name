@@ -17,7 +17,7 @@ import { REGIONS, BIOME, VOLCANO } from './world/worldgen.js';
 import { U } from './world/shaderlib.js';
 import { installAtmosphere, updateAtmosphere } from './world/atmosphere.js';
 import { Terrain } from './world/terrain.js';
-import { loadTerrainTextures } from './world/materials.js';
+import { loadTerrainTextures, TerrainTextures } from './world/materials.js';
 import { TerrainShadow } from './world/terrainShadow.js';
 import { FloraLibrary } from './world/flora.js';
 import { Vegetation } from './world/vegetation.js';
@@ -55,10 +55,10 @@ const SETTINGS_KEY = 'primeval-frontier-settings';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const QUALITY = {
-  low: { msaa: 0, lens: 0, texSize: 256, pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
-  medium: { msaa: 2, lens: 0.6, texSize: 512, pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
-  high: { msaa: 4, lens: 1, texSize: 1024, pixelRatio: 1.25, shadow: 4096, shadowExtent: 240, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
-  ultra: { msaa: 4, lens: 1, texSize: 1024, pixelRatio: 2, shadow: 4096, shadowExtent: 300, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
+  low: { msaa: 0, clouds: 0, lens: 0, texSize: 256, pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
+  medium: { msaa: 2, clouds: 0, lens: 0.6, texSize: 512, pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
+  high: { msaa: 4, clouds: 28, lens: 1, texSize: 1024, pixelRatio: 1.25, shadow: 4096, shadowExtent: 240, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
+  ultra: { msaa: 4, clouds: 44, lens: 1, texSize: 1024, pixelRatio: 2, shadow: 4096, shadowExtent: 300, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
 };
 
 const GradeShader = {
@@ -358,6 +358,7 @@ class Game extends Emitter {
       if (this.impostors) this.impostors.reset();
     }
     this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows, this.quality.shadowExtent || 180);
+    this.sky.setCloudQuality(this.quality.clouds || 0, TerrainTextures.clouds);
     this._shadowDirty = true;
     if (qualityChanged) { this.perfLevel = 0; this._applyPerf(); }
     if (this.bloom) this.bloom.enabled = this.quality.bloom;
@@ -445,6 +446,7 @@ class Game extends Emitter {
       g._fullCount = g._fullCount || g.instanceCount;
       g.instanceCount = Math.floor(g._fullCount * (L >= 3 ? 0.55 : 1));
     }
+    if (this.sky) this.sky.setCloudQuality(Math.round((this.quality.clouds || 0) * (L >= 2 ? 0.6 : 1)), TerrainTextures.clouds);
     const want = L >= 4 ? Math.min(2048, this.quality.shadow) : this.quality.shadow;
     if (this.sky && this.sky.sun.shadow.mapSize.x !== want) this.sky.setShadowQuality(want, this.quality.shadows, this.quality.shadowExtent || 180);
   }
@@ -786,6 +788,7 @@ class Game extends Emitter {
     }
     this._lastRenderT = now;
     this._shadowSchedule();
+    this.sky.renderClouds(this.renderer, this.camera);
     if (this.quality.bloom || true) this.composer.render(dt);
     if (this._capture) {
       const cb = this._capture;
