@@ -60,7 +60,7 @@ export class World {
       this.biomes.set(data.biomes, z0 * N);
       this.veg.set(data.veg, z0 * N);
       done++;
-      onProgress(done / jobs.length);
+      onProgress(0.8 * done / jobs.length);
     };
     let ok = true;
     try {
@@ -96,10 +96,172 @@ export class World {
         await new Promise((r) => setTimeout(r, 0));
       }
     }
+    await this._erode((f) => onProgress(0.8 + 0.2 * f));
     this._computeColors();
     this._buildTextures();
     this._buildMapImage();
     this._buildWaterSpots();
+  }
+
+  // Erosion filter (after Fewes' "eroded terrain noise"): each octave lays gullies that run straight
+  // down the local slope, and the slope it creates steers the next, finer octave, so the channels
+  // branch into drainage networks with sharp ridges between them. Only slopes are touched: flats,
+  // beaches, swamps, river corridors and the sea floor keep their shape.
+  async _erode(onProgress = () => {}) {
+    const H = this.heights, B = this.biomes;
+    // river corridors and the shoreline are never reshaped (their profiles are carved by worldgen)
+    const keep = new Float32Array(N * N);
+    {
+      const q = {};
+      for (let r = 0; r < N; r++) {
+        const z = -HALF + r * CELL;
+        for (let c = 0; c < N; c++) {
+          const k = r * N + c;
+          let m = smoothstep(3, 12, H[k]);
+          if (m > 0) {
+            this.gen.riverQuery(-HALF + c * CELL, z, q);
+            if (q.dist < Infinity) m *= smoothstep(q.width * 0.5 + 30, q.width * 1.5 + 70, q.dist);
+          }
+          keep[k] = m;
+        }
+      }
+    }
+    await new Promise((res) => setTimeout(res, 0));
+    // talus: rock can't stand steeper than this (tan of the angle), so needle spires slump into
+    // pyramidal peaks with scree aprons; badland mesas and jungle karst keep steeper walls
+    const talus = new Float32Array(16).fill(1.05);
+    talus[BIOME.MOUNTAIN] = 1.25; talus[BIOME.SNOW] = 1.2; talus[BIOME.PINEFOREST] = 1.15;
+    talus[BIOME.JUNGLE] = 1.7; talus[BIOME.DESERT] = 2.1; talus[BIOME.CANYON] = 2.1; talus[BIOME.VOLCANIC] = 0.95;
+    onProgress(0.15);
+    await new Promise((res) => setTimeout(res, 0));
+    this._thermal(keep, talus, 70);
+    onProgress(0.3);
+    await new Promise((res) => setTimeout(res, 0));
+    // gradients come from a lightly blurred copy so 4 m noise doesn't steer the gullies
+    const blur = new Float32Array(N * N), tmp = new Float32Array(N * N);
+    const R = 2;
+    for (let r = 0; r < N; r++) {
+      let acc = 0;
+      for (let c = -R; c <= R; c++) acc += H[r * N + clamp(c, 0, N - 1)];
+      for (let c = 0; c < N; c++) {
+        tmp[r * N + c] = acc / (2 * R + 1);
+        acc += H[r * N + Math.min(N - 1, c + R + 1)] - H[r * N + Math.max(0, c - R)];
+      }
+    }
+    for (let c = 0; c < N; c++) {
+      let acc = 0;
+      for (let r = -R; r <= R; r++) acc += tmp[clamp(r, 0, N - 1) * N + c];
+      for (let r = 0; r < N; r++) {
+        blur[r * N + c] = acc / (2 * R + 1);
+        acc += tmp[Math.min(N - 1, r + R + 1) * N + c] - tmp[Math.max(0, r - R) * N + c];
+      }
+    }
+    const skip = new Uint8Array(16);
+    for (const b of [BIOME.OCEAN, BIOME.BEACH, BIOME.RIVER, BIOME.SWAMP]) skip[b] = 1;
+    const TAU = Math.PI * 2;
+    const OCT = [[118, 1], [56, 0.5], [27, 0.26], [13, 0.12]];
+    const hash = (x, z, o) => {
+      let h = (x * 374761393 + z * 668265263 + o * 1442695041) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      h ^= h >>> 16;
+      return h;
+    };
+    const out = new Float32Array(H);
+    for (let r = 2; r < N - 2; r++) {
+      if ((r & 63) === 0) { onProgress(0.3 + 0.7 * r / N); await new Promise((res) => setTimeout(res, 0)); }
+      const z = -HALF + r * CELL;
+      for (let c = 2; c < N - 2; c++) {
+        const k = r * N + c;
+        if (skip[B[k]]) continue;
+        const h0 = H[k];
+        if (h0 < 4) continue;
+        let gx = (blur[k + 1] - blur[k - 1]) / (2 * CELL);
+        let gz = (blur[k + N] - blur[k - N]) / (2 * CELL);
+        const slope = Math.hypot(gx, gz);
+        let mask = smoothstep(0.1, 0.5, slope) * smoothstep(4, 16, h0);
+        if (mask < 0.01) continue;
+        mask *= keep[k];
+        if (mask < 0.01) continue;
+        const x = -HALF + c * CELL;
+        const relief = Math.min(slope, 1.6) * 0.15;
+        let hs = 0, as = 0;
+        for (let o = 0; o < OCT.length; o++) {
+          const tile = OCT[o][0], amp = OCT[o][1] * relief * OCT[0][0];
+          const s = Math.hypot(gx, gz) || 1e-4;
+          const kf = Math.min(1.2, s * 2.5);
+          // perpendicular to the slope: the stripes then run downhill
+          const dx = (gz / s) * kf, dz = (-gx / s) * kf;
+          const px = x / tile, pz = z / tile;
+          const ix = Math.floor(px), iz = Math.floor(pz);
+          const fx = px - ix, fz = pz - iz;
+          let va = 0, vx = 0, vz = 0, wt = 0;
+          for (let i = -2; i <= 1; i++) {
+            for (let j = -2; j <= 1; j++) {
+              const hv = hash(ix - i, iz - j, o);
+              const ox = ((hv & 1023) / 1023) * 0.5, oz = (((hv >>> 10) & 1023) / 1023) * 0.5;
+              const ppx = fx + i - ox, ppz = fz + j - oz;
+              const w = Math.exp(-(ppx * ppx + ppz * ppz) * 2);
+              const m = (ppx * dx + ppz * dz) * TAU;
+              const sn = -Math.sin(m) * w;
+              va += Math.cos(m) * w; vx += sn * dx; vz += sn * dz; wt += w;
+            }
+          }
+          va /= wt; vx /= wt; vz /= wt;
+          hs += va * amp; as += amp;
+          // this octave's own slope (m/m) bends the next octave's gullies: branching
+          gx += vx * TAU / tile * amp * 0.85;
+          gz += vz * TAU / tile * amp * 0.85;
+        }
+        out[k] = h0 + (hs - 0.3 * as) * mask;
+      }
+    }
+    H.set(out);
+    // knock down only the knife-edge fins where gully walls stack up (beyond ~60 degrees)
+    for (let i = 0; i < 16; i++) talus[i] *= 1.45;
+    this._thermal(keep, talus, 5);
+  }
+
+  // Thermal erosion (Gauss-Seidel over an active set): material above the talus slope slides to
+  // the lower neighbours until every slope can stand.
+  _thermal(keep, talus, iters) {
+    const H = this.heights, B = this.biomes;
+    const NB = [1, -1, N, -N, N + 1, N - 1, -N + 1, -N - 1];
+    const DF = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
+    let mark = new Uint8Array(N * N), next = new Uint8Array(N * N);
+    let list = [];
+    for (let r = 1; r < N - 1; r++) for (let c = 1; c < N - 1; c++) { const k = r * N + c; if (keep[k] > 0.02) list.push(k); }
+    const d = new Float32Array(8);
+    for (let it = 0; it < iters && list.length; it++) {
+      const nl = [];
+      for (let li = 0; li < list.length; li++) {
+        const k = list[li];
+        const kp = keep[k];
+        if (kp <= 0.02) continue;
+        const h = H[k];
+        // high bare rock stands steeper than the soil-covered lower slopes
+        const T = talus[B[k]] * CELL * (1 + 0.55 * smoothstep(110, 330, h));
+        let sum = 0, max = 0;
+        for (let i = 0; i < 8; i++) {
+          const j = k + NB[i];
+          let e = 0;
+          if (keep[j] > 0.02) { e = h - H[j] - T * DF[i]; if (e < 0) e = 0; }
+          d[i] = e; sum += e; if (e > max) max = e;
+        }
+        if (max <= 0.02) continue;
+        const move = max * 0.45 * kp;
+        H[k] = h - move;
+        for (let i = 0; i < 8; i++) {
+          if (d[i] <= 0) continue;
+          const j = k + NB[i];
+          H[j] += move * d[i] / sum;
+          if (!next[j]) { next[j] = 1; nl.push(j); }
+        }
+        if (!next[k]) { next[k] = 1; nl.push(k); }
+      }
+      for (let i = 0; i < nl.length; i++) { const j = nl[i]; next[j] = 0; }
+      // keep the border rows out of the set
+      list = nl.filter((j) => { const c = j % N, r = (j / N) | 0; return c > 0 && r > 0 && c < N - 1 && r < N - 1; });
+    }
   }
 
   // ----- Grid helpers -----

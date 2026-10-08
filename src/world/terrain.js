@@ -49,6 +49,13 @@ export function createTerrainMaterial(world, quality) {
         uniform vec2 uTint;
         ${GLSL_NOISE}
         ${GLSL_MEADOW}
+        // triplanar two-octave value noise for rock relief (16 m blocks + 4 m facets)
+        float triN(vec3 p, vec3 bw) {
+          vec3 a = p * 0.065, b = p * 0.24 + 7.3;
+          float n1 = vnoise(a.yz) * bw.x + vnoise(a.xz) * bw.y + vnoise(a.xy) * bw.z;
+          float n2 = vnoise(b.yz) * bw.x + vnoise(b.xz) * bw.y + vnoise(b.xy) * bw.z;
+          return n1 * 0.62 + n2 * 0.38;
+        }
         ${GLSL_PHOTO}
         const float GROUND_ID[10] = float[10](L_GRASS, L_GRASSDRY, L_SOIL, L_MOSSGROUND, L_GRAVEL, L_TRAIL, L_SAND, L_DUNE, L_CRACKED, L_BASALT);
         const float ROCK_ID[5] = float[5](L_ROCK, L_MOSSROCK, L_SANDSTONE, L_BASALT, L_COASTROCK);
@@ -214,6 +221,22 @@ export function createTerrainMaterial(world, quality) {
             float bg = max(a1 - m, 0.0), br = max(a2 - m, 0.0);
             rockW = br / max(bg + br, 1e-4);
             albP = mix(albG, rA, rockW); nW = normalize(mix(nGr, rN, rockW)); hUnder = mix(gH, rH, rockW); roughP = mix(gR, rR, rockW);
+            // macro rock character so big faces never read as one repeated texture on a flat plane:
+            // water and lichen stains running down the face, sedimentary banding, and blocky
+            // metre-to-decametre relief with darker hollows
+            {
+              vec3 wp = vWPos;
+              float st = vnoise(vec2(dot(wp.xz, vec2(0.13, 0.09)), wp.y * 0.018)) * 0.65 + vnoise(vec2(dot(wp.xz, vec2(0.41, -0.3)), wp.y * 0.05)) * 0.35;
+              float band = vnoise(vec2(wp.y * 0.32 + vnoise(wp.xz * 0.015) * 3.0, 0.5));
+              vec3 mt = mix(vec3(1.0), vec3(0.7, 0.68, 0.64), smoothstep(0.5, 0.85, st)) * (0.88 + 0.22 * band);
+              float nearR = 1.0 - smoothstep(180.0, 520.0, camD);
+              float e = 0.9;
+              float k0 = triN(wp, bw), kx = triN(wp + vec3(e, 0.0, 0.0), bw), ky = triN(wp + vec3(0.0, e, 0.0), bw), kz = triN(wp + vec3(0.0, 0.0, e), bw);
+              vec3 g = vec3(kx - k0, ky - k0, kz - k0) / e;
+              vec3 nM = normalize(nW - (g - dot(g, nW) * nW) * 2.6);
+              nW = normalize(mix(nW, nM, rockW * nearR));
+              albP = mix(albP, albP * mt * (0.78 + 0.44 * k0), rockW);
+            }
           }
           albP = mix(vc, albP, photoK);
           nW = normalize(mix(nG0, nW, photoK));
@@ -259,7 +282,7 @@ export function createTerrainMaterial(world, quality) {
           roughP = mix(roughP, 0.8, cov);
         }
         // ---- natural snow caps on ledges of high peaks ----
-        float snowCap = smoothstep(255.0, 290.0, vWPos.y + vnoise(gp * 0.05) * 30.0) * smoothstep(0.45, 0.7, ny + hUnder * 0.15)
+        float snowCap = smoothstep(235.0, 275.0, vWPos.y + vnoise(gp * 0.05) * 30.0) * smoothstep(0.6, 0.8, ny + hUnder * 0.12)
           * smoothstep(520.0, 680.0, volcD);
         // ---- lava flows streaming down Ember Peak: hot near the rim, crusting over further down ----
         float lavaE = 0.0;
@@ -295,17 +318,25 @@ export function createTerrainMaterial(world, quality) {
         }
         float snowCov = 0.0;
         if (snowAmt > 0.005) {
-          snowCov = smoothstep(0.0, 0.3, snowAmt * 1.3 - hUnder * 0.3 - 0.04);
+          // on steep ground the high points of the rock break through: wind-scoured ridges
+          float steepS = 1.0 - smoothstep(0.55, 0.9, ny);
+          snowCov = smoothstep(0.0, 0.3, snowAmt * 1.3 - hUnder * (0.3 + 0.9 * steepS) - 0.04 - steepS * rockW * 0.25);
           vec3 sA = vec3(0.78), sT = vec3(0.0, 0.0, 1.0); float sH = 0.5;
           if (photoK > 0.0) {
             float sc = 1.0 / TILE[int(L_SNOW)];
             photo(L_SNOW, gp * sc, gdx * sc, gdy * sc, vnoise(gp * 0.07), sA, sT, sH);
           }
-          vec3 snowC = sA / max(dot(sA, LUMA), 1e-3) * 0.7 * (0.95 + 0.1 * sH);
+          // wind-packed drifts and old crust vary the brightness at metre-to-decametre scale
+          float drift = fbm3(gp * 0.06 + uWindDir * 3.0);
+          vec3 snowC = sA / max(dot(sA, LUMA), 1e-3) * 0.64 * (0.93 + 0.1 * sH) * (0.9 + 0.14 * drift);
           diffuseColor.rgb = mix(diffuseColor.rgb, snowC, snowCov);
-          vec3 sN = normalize(vec3(sT.x * 0.6 + nG0.x, abs(sT.z) * nG0.y, sT.y * 0.6 + nG0.z));
+          // sastrugi: wind ripples carved across the snow, plus the scanned snow relief
+          vec2 wd = normalize(uWindDir + vec2(1e-3));
+          float rp = dot(gp, wd) * 0.9 + fbm3(gp * 0.2) * 4.0;
+          float sg = cos(rp) * 0.5 * (1.0 - smoothstep(30.0, 140.0, camD)) * smoothstep(0.75, 0.95, ny);
+          vec3 sN = normalize(vec3(sT.x * 0.6 + nG0.x + wd.x * sg * 0.18, abs(sT.z) * nG0.y, sT.y * 0.6 + nG0.z + wd.y * sg * 0.18));
           nW = normalize(mix(nW, sN, snowCov));
-          roughP = mix(roughP, 0.6, snowCov);
+          roughP = mix(roughP, 0.6 - 0.12 * drift, snowCov);
         }
         float snowAmtF = snowCov;
         // ---- rain: wet darkening, puddles in the low spots of the scanned ground ----
