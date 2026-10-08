@@ -4,10 +4,10 @@ import * as THREE from 'three';
 import { BIOME, HALF } from './worldgen.js';
 import { hash2, mulberry32, clamp } from '../core/noise.js';
 
-const CELL = 128;
-const NC = 4096 / CELL; // 32
+export const CELL = 128;
+export const NC = 4096 / CELL; // 32
 
-const TREE_SETS = {
+export const TREE_SETS = {
   [BIOME.GRASSLAND]: [['oak', 0.4], ['oak2', 0.15], ['araucaria', 0.25], ['cycad', 0.1], ['treefern', 0.1]],
   [BIOME.FOREST]: [['oak', 0.35], ['oak2', 0.25], ['conifer', 0.12], ['treefern', 0.2], ['araucaria', 0.08]],
   [BIOME.PINEFOREST]: [['conifer', 0.5], ['conifer2', 0.38], ['araucaria', 0.12]],
@@ -84,6 +84,21 @@ export class Vegetation {
 
   key(cx, cz) { return cz * NC + cx; }
 
+  // which cells currently show real trees (sampled by the impostor forest's vertex shader)
+  get loadedTex() {
+    if (!this._loadedTex) {
+      this._loadedData = new Uint8Array(NC * NC);
+      this._loadedTex = new THREE.DataTexture(this._loadedData, NC, NC, THREE.RedFormat, THREE.UnsignedByteType);
+      this._loadedTex.needsUpdate = true;
+    }
+    return this._loadedTex;
+  }
+  _setLoaded(cx, cz, on) {
+    const t = this.loadedTex;
+    this._loadedData[cz * NC + cx] = on ? 255 : 0;
+    t.needsUpdate = true;
+  }
+
   addExclusion(x, z, r) {
     this.exclusions.push({ x, z, r });
     // Clear existing items in that footprint
@@ -142,6 +157,7 @@ export class Vegetation {
       const wx = -HALF + (cell.cx + 0.5) * CELL, wz = -HALF + (cell.cz + 0.5) * CELL;
       const d = Math.hypot(wx - px, wz - pz) - CELL * 0.7;
       if (d > rFar + 120) {
+        this._setLoaded(cell.cx, cell.cz, false);
         this._disposeLayer(cell.trees);
         if (cell.ground) this._disposeLayer(cell.ground);
         this.cells.delete(k);
@@ -278,14 +294,14 @@ export class Vegetation {
     return true;
   }
 
-  _buildCell(cx, cz) {
+  cellSeed(cx, cz) { return (cx * 7919 + cz * 104729) ^ 0x5bd1e995; }
+
+  // Tree placements for one cell. Shared with the distant impostor forest so far billboards stand
+  // exactly where the real trees will appear. Consumes rand identically to the original layout.
+  treePlacements(cx, cz, rand, placements = []) {
     const W = this.world;
-    const cell = { cx, cz, trees: null, ground: null, shadow: false };
     const x0 = -HALF + cx * CELL, z0 = -HALF + cz * CELL;
-    const placements = [];
-    const rand = mulberry32((cx * 7919 + cz * 104729) ^ 0x5bd1e995);
     const density = this.quality.treeDensity;
-    // Trees: jittered grid
     const sp = 7;
     let idx = 0;
     for (let gz = 0; gz < CELL / sp; gz++) {
@@ -315,6 +331,17 @@ export class Vegetation {
         });
       }
     }
+    return idx;
+  }
+
+  _buildCell(cx, cz) {
+    const W = this.world;
+    const cell = { cx, cz, trees: null, ground: null, shadow: false };
+    const x0 = -HALF + cx * CELL, z0 = -HALF + cz * CELL;
+    const placements = [];
+    const rand = mulberry32(this.cellSeed(cx, cz));
+    let idx = this.treePlacements(cx, cz, rand, placements);
+    this._setLoaded(cx, cz, true);
     // Rocks & ore
     const rsp = 14;
     for (let gz = 0; gz < CELL / rsp; gz++) {

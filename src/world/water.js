@@ -47,7 +47,7 @@ uniform float uTime; uniform vec3 uSunDir; uniform vec3 uSunColor; uniform vec3 
 uniform vec3 uFogColor; uniform float uFogDensity; uniform float uRain; uniform float uNight; uniform sampler2D uMaskTex;
 uniform float uFlash; uniform float uUnder;
 uniform sampler2D tSceneColor; uniform sampler2D tSceneDepth; uniform vec2 uResolution; uniform float uCamNear; uniform float uCamFar; uniform float uSSR;
-uniform mat4 projectionMatrix; uniform float uMistA; uniform float uMistBase;
+uniform mat4 projectionMatrix; uniform float uMistA; uniform float uMistBase; uniform vec4 uRip[12];
 varying vec3 vWPos; varying float vDepth; varying vec2 vFlowUV; varying float vSteep; varying vec3 vWaveN;
 ${GLSL_NOISE}
 ${GLSL_HEIGHT}
@@ -77,6 +77,19 @@ void main(){
     float r = length(f) - t * 0.5;
     float ring = exp(-r * r * 400.0) * (1.0 - t) * uRain * detail;
     g += normalize(f + 0.0001) * ring * 0.9;
+  }
+  // expanding ripple rings from wading, swimming, footfalls and leaping fish
+  float ripFoam = 0.0;
+  for (int k = 0; k < 12; k++) {
+    vec4 rp = uRip[k];
+    float age = uTime - rp.z;
+    if (rp.w <= 0.0 || age < 0.0 || age > 4.5) continue;
+    vec2 dv = vWPos.xz - rp.xy;
+    float dd = length(dv);
+    float x = dd - age * (1.6 + rp.w * 0.8);
+    float env = exp(-x * x * 5.0) * (1.0 - age / 4.5) * rp.w / (1.0 + dd * 0.15);
+    g += (dv / max(dd, 0.01)) * env * 0.85 * cos(x * 10.0);
+    ripFoam += exp(-dd * dd * 2.0 / (rp.w + 0.2)) * smoothstep(1.2, 0.0, age) * rp.w * 0.45;
   }
   vec3 N = normalize(vWaveN + vec3(-g.x, 0.0, -g.y) * detail + vec3(-g.x, 0.0, -g.y) * 0.25);
   if (!gl_FrontFacing) N = -N;
@@ -190,6 +203,7 @@ void main(){
     float streak = vnoise(vec2(vFlowUV.x * 9.0, vFlowUV.y * 0.3 - uTime * sp)) * 0.6 + vnoise(vec2(vFlowUV.x * 23.0 + 3.0, vFlowUV.y * 0.9 - uTime * sp * 1.4)) * 0.4;
     foam = smoothstep(0.4, 1.0, vSteep) * smoothstep(0.5, 0.75, streak) * 0.85 + smoothstep(0.12, 0.0, depth) * 0.12 * foamN;
   #endif
+  foam = max(foam, ripFoam * foamN * 1.4);
   col = mix(col, vec3(0.92, 0.95, 0.97) * dayL, clamp(foam, 0.0, 1.0));
   col += vec3(0.5, 0.55, 0.7) * uFlash * 0.4;
   float alpha = mix(0.35, 0.96, smoothstep(0.0, 2.5, depth));
@@ -230,7 +244,7 @@ function makeWaterMaterial(world, ocean, extra) {
     uFlash: U.uFlash, uHeightTex: { value: world.heightTex }, uMaskTex: { value: world.maskTex },
     uWaveAmp: extra.waveAmp, uLevel: ocean ? extra.seaLevel : extra.riverOffset, uOrigin: extra.origin, uUnder: extra.under,
     ...SSR_U,
-    uMistA: A.uMistA, uMistBase: A.uMistBase,
+    uMistA: A.uMistA, uMistBase: A.uMistBase, uRip: extra.rip,
   };
   return new THREE.ShaderMaterial({
     uniforms, vertexShader: waterVert, fragmentShader: waterFrag,
@@ -309,7 +323,10 @@ export class Water {
     this.extra = {
       zenith: { value: new THREE.Color(0.2, 0.4, 0.8) }, waveAmp: { value: 0.5 },
       seaLevel: { value: 0 }, riverOffset: { value: 0 }, origin: { value: new THREE.Vector3() }, under: { value: 0 },
+      rip: { value: Array.from({ length: 12 }, () => new THREE.Vector4(0, 0, -99, 0)) },
     };
+    this._ripI = 0;
+    this._wadeT = 0;
     this.oceanMat = makeWaterMaterial(world, true, this.extra);
     this.ocean = new THREE.Mesh(oceanGeometry(), this.oceanMat);
     this.ocean.frustumCulled = false;
@@ -350,6 +367,27 @@ export class Water {
   }
 
   get waterfalls() { return this.falls; }
+
+  // spawn a ripple ring on the water surface at (x, z); strength ~0.2 (drip) .. 2 (dinosaur)
+  addRipple(x, z, strength = 1) {
+    this.extra.rip.value[this._ripI].set(x, z, U.uTime.value, Math.min(2, strength));
+    this._ripI = (this._ripI + 1) % 12;
+  }
+
+  // wading and swimming leave rings behind the player
+  emitPlayer(dt, p) {
+    if (!p || !p.alive || p.inVehicle) return;
+    const w = this.world;
+    const wl = w.waterLevelAt(p.pos.x, p.pos.z);
+    const depth = wl - w.getHeight(p.pos.x, p.pos.z);
+    if (depth < 0.15 || p.pos.y > wl + 0.3) return;
+    this._wadeT -= dt;
+    const sp = Math.hypot(p.vel.x, p.vel.z);
+    if (this._wadeT <= 0) {
+      this._wadeT = sp > 0.5 ? Math.max(0.22, 0.6 - sp * 0.06) : 1.4;
+      this.addRipple(p.pos.x, p.pos.z, sp > 0.5 ? 0.55 + Math.min(0.6, sp * 0.08) : 0.25);
+    }
+  }
 
   update(dt, camPos, weather, zenith) {
     this.extra.origin.value.set(Math.round(camPos.x / 8) * 8, 0, Math.round(camPos.z / 8) * 8);

@@ -25,6 +25,7 @@ import { POIs } from './world/pois.js';
 import { Caves } from './world/caves.js';
 import { AmbientLife } from './world/ambient.js';
 import { Volcano } from './world/volcano.js';
+import { ImpostorForest } from './world/impostors.js';
 import { DinoManager } from './dinos/manager.js';
 import { SPECIES, SPECIES_LIST } from './dinos/species.js';
 import { Player } from './player/player.js';
@@ -174,6 +175,7 @@ class Game extends Emitter {
     this.volcano = new Volcano(this);
     this.teleporter = new Teleporter(this);
     this.teleporter.setVisible(false);
+    this.impostors = new ImpostorForest(this);
     await step(62, 'Raising ancient ruins…');
     this.pois = new POIs(this);
     this.pois.generate();
@@ -321,7 +323,8 @@ class Game extends Emitter {
       this.resize();
       // rebuild grass and vegetation density
       if (this.grass) { this.scene.remove(this.grass.mesh); this.grass.mesh.geometry.dispose(); this.grass = new Grass(this.world, this.scene, this.quality); }
-      if (this.veg) { for (const [k, cell] of this.veg.cells) { this.veg._disposeLayer(cell.trees); if (cell.ground) this.veg._disposeLayer(cell.ground); } this.veg.cells.clear(); }
+      if (this.veg) { for (const [k, cell] of this.veg.cells) { this.veg._setLoaded(cell.cx, cell.cz, false); this.veg._disposeLayer(cell.trees); if (cell.ground) this.veg._disposeLayer(cell.ground); } this.veg.cells.clear(); }
+      if (this.impostors) this.impostors.reset();
     }
     this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows);
     if (this.bloom) this.bloom.enabled = this.quality.bloom;
@@ -511,6 +514,7 @@ class Game extends Emitter {
       this.grass.update(this.camera.position);
       this.grass.setPushers(this._grassPushers(title));
       this.water.update(dt, this.camera.position, this.weather, this.sky.uniforms.uZenith.value);
+      if (!title) this.water.emitPlayer(dt, this.player);
     }
     // fog
     const fog = this.scene.fog;
@@ -533,6 +537,7 @@ class Game extends Emitter {
     this.ambient.update(dt, P);
     this.volcano.update(dt);
     this.season.update(dt);
+    this.impostors.update();
     // audio environment
     if (!title) this._audioEnv(dt);
     // grading

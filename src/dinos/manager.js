@@ -418,6 +418,7 @@ export class DinoManager {
     if (wl > gy + 0.05) {
       surface = 'water';
       if (size > 2) g.fx.splash(pos, Math.min(3, 0.4 + mass * 0.6) * (0.6 + fast * 0.6));
+      g.water.addRipple(fx, fz, Math.min(2, 0.4 + mass * 0.5));
     } else if (size > 2.5) {
       const b = w.getBiome(fx, fz);
       const tint = {

@@ -335,6 +335,7 @@ export class AmbientLife {
           const dir = Math.random() * 6.28;
           this.fishJump = { x, z, wl, dir, t: 0, dur: rnd(0.7, 1.1), h: rnd(0.6, 1.4), len: rnd(1, 2.2) };
           g.fx.splash(new THREE.Vector3(x, wl, z), 0.5);
+          g.water.addRipple(x, z, 0.6);
           g.audio.play('splash', { pos: new THREE.Vector3(x, wl, z), vol: 0.35 });
           break;
         }
@@ -352,6 +353,7 @@ export class AmbientLife {
       if (s >= 1) {
         this.fishMesh.visible = false;
         g.fx.splash(new THREE.Vector3(x, J.wl, z), 0.7);
+        g.water.addRipple(x, z, 0.8);
         g.audio.play('splash', { pos: new THREE.Vector3(x, J.wl, z), vol: 0.4 });
         this.fishJump = null;
       }
