@@ -27,3 +27,5 @@ Tree bark (`bark_albedo.jpg`, `bark_normal.jpg`): jMonkeyEngine test data, `Mode
 (BSD 3-Clause, Copyright (c) 2009-2024 jMonkeyEngine).
 
 Dinosaur skin detail (`skin_nh.jpg`, `skin_ao.jpg`): generated procedurally by `tools/build_skin.py` (project-original).
+- `foliage_albedo.webp`, `foliage_normal.webp`: project-original, generated procedurally by
+  `tools/build_foliage.py` (every leaf, needle and frond rasterised from botanical rules).

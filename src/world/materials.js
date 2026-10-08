@@ -161,6 +161,8 @@ export const TerrainTextures = {
   skinNH: null, // reptile scale detail: normal xy + height
   skinAO: null, // crevice occlusion, per-scale tint, tubercle mask
   skinOK: { value: 0 },
+  foliageMap: null, // drawn leaf/needle/frond atlas (tools/build_foliage.py), straight alpha
+  foliageNormal: null,
 };
 
 function imageTexture(img, srgb, aniso) {
@@ -202,6 +204,20 @@ export async function loadTerrainTextures(renderer, size = 1024, base = './') {
     TerrainTextures.skinOK.value = 1;
   } catch (e) {
     console.warn('skin detail unavailable, using procedural scales', e);
+  }
+  try {
+    const [fa, fn] = await Promise.all([loadImage(base + 'textures/foliage_albedo.webp'), loadImage(base + 'textures/foliage_normal.webp')]);
+    const leafTex = (img, srgb) => {
+      const t = new THREE.Texture(img);
+      t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      t.anisotropy = aniso;
+      t.needsUpdate = true;
+      return t;
+    };
+    TerrainTextures.foliageMap = leafTex(fa, true);
+    TerrainTextures.foliageNormal = leafTex(fn, false);
+  } catch (e) {
+    console.warn('foliage atlas unavailable, using painted leaves', e);
   }
   return TerrainTextures;
 }

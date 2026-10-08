@@ -99,6 +99,18 @@ const leafTile = `
   float sh = fract(sin(dot(vSeasonSeed.xz, vec2(12.9898, 78.233))) * 43758.5453);
   float drop = vnoise(vSeasonW.xz * 1.9 + vSeasonW.y * 1.3) * 0.7 + sh * 0.3;`;
 
+// alpha-tested leaves thin out in the blurrier mips; scale coverage back up by mip level so distant
+// crowns stay as full as close ones
+const mipCoverage = `#include <map_fragment>
+  #ifdef USE_MAP
+  {
+    vec2 tsz = vec2(textureSize(map, 0));
+    vec2 ddx = dFdx(vMapUv * tsz), ddy = dFdy(vMapUv * tsz);
+    float lod = 0.5 * log2(max(max(dot(ddx, ddx), dot(ddy, ddy)), 1e-8));
+    diffuseColor.a *= 1.0 + max(0.0, lod) * 0.25;
+  }
+  #endif`;
+
 // Shadow-depth material for foliage: sways with the wind and loses its leaves in winter like the visible canopy
 export function foliageDepthMaterial(map, strength = 1) {
   const m = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map, alphaTest: 0.45 });
@@ -112,6 +124,7 @@ export function foliageDepthMaterial(map, strength = 1) {
       .replace('#include <common>', `#include <common>
         uniform float uWinter; varying vec3 vSeasonW; varying vec3 vSeasonSeed;
         ${GLSL_NOISE}`)
+      .replace('#include <map_fragment>', mipCoverage)
       .replace('#include <alphatest_fragment>', `#include <alphatest_fragment>
         {
           ${leafTile}
@@ -134,6 +147,7 @@ export function addWind(material, strength = 1, translucent = false, seasonal = 
       .replace('#include <common>', '#include <common>\n' + windPars)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n' + windMain(strength))
       .replace('#include <project_vertex>', '#include <project_vertex>\n' + seasonVert);
+    if (seasonal === 'leaf') shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', mipCoverage);
     if (seasonal) {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>

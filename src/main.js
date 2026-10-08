@@ -5,6 +5,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import './ui/style.css';
 import { GodRaysPass, WaterPass, CinematicPass } from './systems/postfx.js';
 
@@ -54,10 +55,10 @@ const SETTINGS_KEY = 'primeval-frontier-settings';
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const QUALITY = {
-  low: { lens: 0, texSize: 256, pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
-  medium: { lens: 0.6, texSize: 512, pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
-  high: { lens: 1, texSize: 1024, pixelRatio: 1.25, shadow: 4096, shadowExtent: 240, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
-  ultra: { lens: 1, texSize: 1024, pixelRatio: 2, shadow: 4096, shadowExtent: 300, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
+  low: { msaa: 0, lens: 0, texSize: 256, pixelRatio: 0.7, shadow: 1024, shadows: true, treeDist: 340, groundDist: 110, grassCount: 14000, grassRadius: 42, bloom: false, viewScale: 0.8, treeDensity: 0.7, groundDensity: 0.55 },
+  medium: { msaa: 2, lens: 0.6, texSize: 512, pixelRatio: 1, shadow: 2048, shadows: true, treeDist: 500, groundDist: 160, grassCount: 32000, grassRadius: 58, bloom: true, viewScale: 1, treeDensity: 0.9, groundDensity: 0.8 },
+  high: { msaa: 4, lens: 1, texSize: 1024, pixelRatio: 1.25, shadow: 4096, shadowExtent: 240, shadows: true, treeDist: 680, groundDist: 210, grassCount: 60000, grassRadius: 72, bloom: true, viewScale: 1.15, treeDensity: 1, groundDensity: 1 },
+  ultra: { msaa: 4, lens: 1, texSize: 1024, pixelRatio: 2, shadow: 4096, shadowExtent: 300, shadows: true, treeDist: 900, groundDist: 260, grassCount: 95000, grassRadius: 90, bloom: true, viewScale: 1.4, treeDensity: 1.1, groundDensity: 1.25 },
 };
 
 const GradeShader = {
@@ -86,8 +87,8 @@ const GradeShader = {
       vec2 cq = uv - 0.5;
       float ca = dot(cq, cq) * 0.0022;
       vec4 col = texture2D(tDiffuse, uv);
-      col.r = texture2D(tDiffuse, uv - cq * ca * 4.0).r;
-      col.b = texture2D(tDiffuse, uv + cq * ca * 4.0).b;
+      col.r = texture2D(tDiffuse, uv - cq * ca * 2.0).r;
+      col.b = texture2D(tDiffuse, uv + cq * ca * 2.0).b;
       float l = dot(col.rgb, vec3(0.299, 0.587, 0.114));
       // filmic split toning: cool shadows, warm highlights
       col.rgb *= mix(vec3(0.94, 0.98, 1.06), vec3(1.05, 1.0, 0.93), smoothstep(0.02, 0.9, l));
@@ -304,7 +305,12 @@ class Game extends Emitter {
 
   _setupComposer() {
     const r = this.renderer;
-    this.composer = new EffectComposer(r);
+    // HDR targets with hardware multisampling: smooth geometry edges and, through alpha-to-coverage,
+    // soft natural leaf and grass edges instead of shimmering cut-outs
+    const pr = r.getPixelRatio();
+    const rt0 = new THREE.WebGLRenderTarget(innerWidth * pr, innerHeight * pr, { type: THREE.HalfFloatType, samples: this.quality.msaa || 0 });
+    rt0.texture.name = 'EffectComposer.rt1';
+    this.composer = new EffectComposer(r, rt0);
     for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
       rt.depthTexture = new THREE.DepthTexture(rt.width, rt.height);
       rt.depthTexture.type = THREE.UnsignedIntType;
@@ -323,6 +329,19 @@ class Game extends Emitter {
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
+    // morphological AA for the remaining shading edges where multisampling is off
+    this.smaa = new SMAAPass();
+    this.smaa.enabled = !(this.quality.msaa > 0);
+    this.composer.addPass(this.smaa);
+  }
+
+  _applyMsaa() {
+    if (!this.composer) return;
+    const n = this.quality.msaa || 0;
+    for (const rt of [this.composer.renderTarget1, this.composer.renderTarget2]) {
+      if (rt.samples !== n) { rt.samples = n; rt.dispose(); }
+    }
+    if (this.smaa) this.smaa.enabled = !(n > 0);
   }
 
   applySettings(qualityChanged = false) {
@@ -330,6 +349,7 @@ class Game extends Emitter {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ }
     if (qualityChanged) {
       Object.assign(this.quality, QUALITY[S.quality]);
+      this._applyMsaa();
       this.resScale = 1;
       this.resize();
       // rebuild grass and vegetation density

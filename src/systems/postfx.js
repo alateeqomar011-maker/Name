@@ -319,7 +319,7 @@ const cineShader = {
       float c = (z - uFocus) / max(z, 0.01);
       // background softens gently and only well behind the subject; foreground blurs sooner
       float far = smoothstep(uFocus * 4.0, uFocus * 40.0, z) * uFarBlur * 0.22;
-      float near = clamp(-c, 0.0, 1.0) * 1.6 * smoothstep(uFocus * 0.6, uFocus * 0.15, z);
+      float near = clamp(-c, 0.0, 1.0) * 1.0 * smoothstep(uFocus * 0.5, uFocus * 0.12, z);
       return (far - near) * uMaxCoC * uAperture;
     }
     const float GA = 2.39996323;
@@ -407,7 +407,7 @@ export class CinematicPass extends Pass {
     u.uFarBlur.value = farBlur;
     u.uMB.value = motionBlur;
     // shutter scales with frame time so the smear length stays like a 180° film shutter
-    u.uShutter.value = THREE.MathUtils.clamp(0.5 * (1 / 60) / Math.max(dt, 1e-3), 0.25, 0.75);
+    u.uShutter.value = THREE.MathUtils.clamp(0.5 * (1 / 60) / Math.max(dt, 1e-3), 0.05, 0.75);
   }
   setSize(w, h) { this.uniforms.uRes.value.set(w, h); }
   render(renderer, writeBuffer, readBuffer) {
@@ -419,7 +419,12 @@ export class CinematicPass extends Pass {
     u.uInvProj.value.copy(cam.projectionMatrixInverse);
     u.uInvView.value.copy(cam.matrixWorld);
     this._vp.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
-    if (this._first) { this.prevVP.copy(this._vp); this._first = false; }
+    // camera cuts (teleports, mode switches, respawns) must not smear the first frame after them
+    const cut = this._prevPos && (cam.position.distanceTo(this._prevPos) > 6 || cam.getWorldDirection(this._dir).dot(this._prevDir) < 0.85);
+    if (this._first || cut) { this.prevVP.copy(this._vp); this._first = false; }
+    (this._prevPos || (this._prevPos = new THREE.Vector3())).copy(cam.position);
+    this._dir = this._dir || new THREE.Vector3();
+    (this._prevDir || (this._prevDir = new THREE.Vector3())).copy(cam.getWorldDirection(this._dir));
     u.uPrevVP.value.copy(this.prevVP);
     this.prevVP.copy(this._vp);
     if (this.renderToScreen) renderer.setRenderTarget(null);

@@ -945,11 +945,13 @@ function photoRock(m) {
 // ---------- Library ----------
 export class FloraLibrary {
   constructor() {
-    this.atlas = makeLeafAtlas();
+    // drawn foliage atlas with leaf relief when it loaded during boot, painted canvas otherwise
+    this.atlas = TerrainTextures.foliageMap || makeLeafAtlas();
     const bark = makeBark();
     this.bark = bark.tex;
     this.leafMat = addWind(new THREE.MeshStandardMaterial({
-      map: this.atlas, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82, metalness: 0,
+      map: this.atlas, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.85, metalness: 0, envMapIntensity: 0.5,
+      ...(TerrainTextures.foliageNormal ? { normalMap: TerrainTextures.foliageNormal, normalScale: new THREE.Vector2(0.6, 0.6), color: new THREE.Color(1.32, 1.36, 1.15) } : {}),
     }), 1.0, true, 'leaf');
     this.leafMat.alphaToCoverage = true;
     this.leafDepthMat = foliageDepthMaterial(this.atlas, 1.0);

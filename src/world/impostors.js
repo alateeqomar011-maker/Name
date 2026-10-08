@@ -114,6 +114,7 @@ export class ImpostorForest {
     geo.instanceCount = this.pos.length / 3;
     this.count = geo.instanceCount;
     const mat = new THREE.MeshLambertMaterial({ map: this.rt.texture, alphaTest: 0.4, side: THREE.DoubleSide });
+    mat.alphaToCoverage = true; // soft canopy silhouettes under MSAA
     const uni = {
       uLoaded: { value: g.veg.loadedTex }, uUV: { value: this.uvInfo }, uSize: { value: this.sizeInfo },
       uFar: { value: 3600 }, uTime: U.uTime, uWind: U.uWind, uBright: { value: 1.0 },
