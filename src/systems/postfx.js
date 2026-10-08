@@ -66,9 +66,30 @@ const shader = {
     }`,
 };
 
+// Scene luminance probe for eye adaptation: a tiny log-luminance image read back asynchronously
+const lumShader = {
+  vertexShader: shader.vertexShader,
+  fragmentShader: `uniform sampler2D tDiffuse; varying vec2 vUv;
+    void main(){
+      float s = 0.0;
+      for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
+        vec3 c = texture2D(tDiffuse, vUv + (vec2(float(i), float(j)) - 1.5) / vec2(64.0, 36.0)).rgb;
+        s += log2(max(dot(c, vec3(0.2126, 0.7152, 0.0722)), 1e-4));
+      }
+      gl_FragColor = vec4(clamp((s / 16.0 + 12.0) / 16.0, 0.0, 1.0), 0.0, 0.0, 1.0);
+    }`,
+};
+
 export class GodRaysPass extends Pass {
   constructor() {
     super();
+    this.lumRT = new THREE.WebGLRenderTarget(16, 9, { type: THREE.UnsignedByteType, depthBuffer: false });
+    this.lumMat = new THREE.ShaderMaterial({ uniforms: { tDiffuse: { value: null } }, vertexShader: lumShader.vertexShader, fragmentShader: lumShader.fragmentShader, depthTest: false, depthWrite: false });
+    this.lumQuad = new FullScreenQuad(this.lumMat);
+    this.lumBuf = new Uint8Array(16 * 9 * 4);
+    this.avgLum = 0.18;
+    this._lumN = 0;
+    this._lumBusy = false;
     this.material = new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.clone(shader.uniforms), vertexShader: shader.vertexShader, fragmentShader: shader.fragmentShader, depthTest: false, depthWrite: false });
     this.uniforms = this.material.uniforms;
     this.fsQuad = new FullScreenQuad(this.material);
@@ -88,7 +109,23 @@ export class GodRaysPass extends Pass {
     this.uniforms.uSunColor.value.copy(sunColor);
     this.uniforms.uFlare.value = strength * (facing > 0.6 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1 ? (facing - 0.6) * 2.5 : 0) * this.visible;
   }
+  _probe(renderer, readBuffer) {
+    const now = performance.now();
+    if (this._lumBusy || now - (this._lumAt || 0) < 400 || !renderer.readRenderTargetPixelsAsync) return;
+    this._lumAt = now;
+    this.lumMat.uniforms.tDiffuse.value = readBuffer.texture;
+    renderer.setRenderTarget(this.lumRT);
+    this.lumQuad.render(renderer);
+    this._lumBusy = true;
+    renderer.readRenderTargetPixelsAsync(this.lumRT, 0, 0, 16, 9, this.lumBuf).then(() => {
+      let s = 0;
+      for (let i = 0; i < 16 * 9; i++) s += (this.lumBuf[i * 4] / 255) * 16 - 12;
+      this.avgLum = Math.pow(2, s / (16 * 9));
+      this._lumBusy = false;
+    }).catch(() => { this._lumBusy = false; });
+  }
   render(renderer, writeBuffer, readBuffer) {
+    this._probe(renderer, readBuffer);
     this.uniforms.tDiffuse.value = readBuffer.texture;
     this.uniforms.tDepth.value = readBuffer.depthTexture;
     if (this.renderToScreen) renderer.setRenderTarget(null);

@@ -557,7 +557,30 @@ class Game extends Emitter {
     G.uPhoto.value = this.player.photoMode ? 1 : 0;
     G.uWarm.value = this.sky.dayFactor * (1 - this.weather.local.cloud);
     // snow throws back far more light: expose a touch lower in winter
-    this.renderer.toneMappingExposure = (inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5) * (1 - U.uWinter.value * 0.2);
+    const baseExp = (inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5) * (1 - U.uWinter.value * 0.2);
+    // eye adaptation: measured scene luminance gently opens up in shade and stops down in glare
+    if (this.godRays && this.godRays.enabled) {
+      const key = 0.16 / Math.max(0.02, this.godRays.avgLum);
+      const target = Math.min(1.45, Math.max(0.78, Math.pow(key, 0.45)));
+      this._adapt = (this._adapt || 1) + (target - (this._adapt || 1)) * (1 - Math.exp(-dt * 1.2));
+    } else this._adapt = 1;
+    this.renderer.toneMappingExposure = baseExp * this._adapt;
+    // ground bounce: the hemisphere light's lower half takes the colour of the ground around the camera
+    this._bounceT = (this._bounceT || 0) - dt;
+    if (this._bounceT <= 0) {
+      this._bounceT = 0.5;
+      const w = this.world, c = this.camera.position, tmp = [0, 0, 0];
+      const b = this._bounce || (this._bounce = new THREE.Color());
+      let r = 0, gg = 0, bb = 0;
+      for (let k = 0; k < 9; k++) {
+        const x = c.x + ((k % 3) - 1) * 10, z = c.z + (Math.floor(k / 3) - 1) * 10;
+        if (!w.inBounds(x, z)) continue;
+        w.colorLinear(w.cellIndex(x, z), tmp);
+        r += tmp[0]; gg += tmp[1]; bb += tmp[2];
+      }
+      b.setRGB(r / 9, gg / 9, bb / 9).lerp(new THREE.Color(0.62, 0.65, 0.7), U.uWinter.value * 0.85);
+    }
+    if (!inCave && this._bounce) this.sky.hemi.groundColor.copy(this._bounce).multiplyScalar(1.9 * (0.08 + 0.92 * this.sky.dayFactor));
   }
 
   // dawn ground mist: pools in low ground, heavier in swamps/jungles, autumn and after rain; wind and sun burn it off

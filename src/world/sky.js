@@ -15,7 +15,46 @@ const skyFrag = /* glsl */ `
 uniform vec3 uSunDir; uniform vec3 uZenith; uniform vec3 uHorizon; uniform vec3 uSunColor; uniform vec3 uGlow;
 uniform float uCloudCover; uniform float uCloudDark; uniform float uTime; uniform float uNight; uniform float uFlash;
 uniform float uStars; uniform vec2 uCloudOffset; uniform vec3 uTint;
+uniform float uPhys; uniform float uSkyI; uniform float uMie;
 varying vec3 vDir;
+// single-scattering atmosphere (Rayleigh + Mie + ozone absorption) seen from 300 m above sea level
+const float A_RE = 6360e3, A_RA = 6420e3, A_HR = 7994.0, A_HM = 1200.0;
+const vec3 A_BR = vec3(5.5e-6, 13.0e-6, 22.4e-6);
+const vec3 A_BO = vec3(1.3e-6, 3.76e-6, 0.17e-6);
+vec2 aSphere(vec3 o, vec3 d, float r){ float b = dot(o, d); float c = dot(o, o) - r * r; float D = b * b - c; if (D < 0.0) return vec2(-1.0); D = sqrt(D); return vec2(-b - D, -b + D); }
+vec3 skyScatter(vec3 rd, vec3 sd){
+  vec3 ro = vec3(0.0, A_RE + 300.0, 0.0);
+  float tmax = aSphere(ro, rd, A_RA).y;
+  vec2 tg = aSphere(ro, rd, A_RE); if (tg.x > 0.0) tmax = tg.x;
+  const int N = 10; const int M = 3;
+  float seg = tmax / float(N), tc = 0.0, odR = 0.0, odM = 0.0;
+  vec3 sR = vec3(0.0), sM = vec3(0.0);
+  float mu = dot(rd, sd);
+  float phR = 3.0 / (16.0 * 3.14159) * (1.0 + mu * mu);
+  float g = 0.76;
+  float phM = 3.0 / (8.0 * 3.14159) * ((1.0 - g * g) * (1.0 + mu * mu)) / ((2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * mu, 1.5));
+  vec3 bM = vec3(21e-6 * uMie);
+  for (int i = 0; i < N; i++) {
+    vec3 p = ro + rd * (tc + seg * 0.5);
+    float h = length(p) - A_RE;
+    float hr = exp(-h / A_HR) * seg, hm = exp(-h / A_HM) * seg;
+    odR += hr; odM += hm;
+    float sl = aSphere(p, sd, A_RA).y / float(M);
+    float tcl = 0.0, oR = 0.0, oM = 0.0; bool lit = true;
+    for (int j = 0; j < M; j++) {
+      vec3 q = p + sd * (tcl + sl * 0.5);
+      float hl = length(q) - A_RE;
+      if (hl < 0.0) { lit = false; break; }
+      oR += exp(-hl / A_HR) * sl; oM += exp(-hl / A_HM) * sl; tcl += sl;
+    }
+    if (lit) {
+      vec3 att = exp(-((A_BR + A_BO) * (odR + oR) + bM * 1.1 * (odM + oM)));
+      sR += att * hr; sM += att * hm;
+    }
+    tc += seg;
+  }
+  return sR * A_BR * phR + sM * bM * phM;
+}
 ${GLSL_NOISE}
 float fbm5(vec2 p){ float s=0.0; float a=0.5; for(int i=0;i<5;i++){ s+=a*vnoise(p); p=p*2.02+11.3; a*=0.5;} return s/0.96875; }
 void main(){
@@ -23,7 +62,15 @@ void main(){
   float y = dir.y;
   float yp = max(y, 0.0);
   vec3 col = mix(uHorizon, uZenith, pow(yp, 0.45));
-  if (y < 0.0) col = mix(uHorizon, uHorizon * 0.55, smoothstep(0.0, -0.25, y));
+  if (uPhys > 0.001) {
+    // twilight: single scattering goes black the moment the sun sets, so keep a dimming sky lit
+    // from a sun pinned just above the horizon (a cheap stand-in for multiple scattering)
+    vec3 sdx = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.025), uSunDir.z));
+    float twi = smoothstep(-0.2, 0.025, uSunDir.y);
+    vec3 phys = skyScatter(normalize(vec3(dir.x, max(y, 0.0) + 0.002, dir.z)), sdx) * uSkyI * twi * twi;
+    col = mix(col, phys, uPhys);
+  }
+  if (y < 0.0) col = mix(col, uHorizon * 0.55, smoothstep(0.0, -0.25, y));
   float sd = max(dot(dir, uSunDir), 0.0);
   // atmospheric glow around sun
   col += uGlow * (pow(sd, 6.0) * 0.6 + pow(sd, 32.0) * 0.8) * (1.0 - yp * 0.6);
@@ -107,6 +154,41 @@ void main(){
   #include <colorspace_fragment>
 }`;
 
+// CPU twin of the shader's scattering model, used for fog, horizon and cloud lighting colours
+const S_RE = 6360e3, S_RA = 6420e3, S_HR = 7994, S_HM = 1200;
+const S_BR = [5.5e-6, 13.0e-6, 22.4e-6], S_BO = [1.3e-6, 3.76e-6, 0.17e-6];
+function sSphere(o, d, r) { const b = o[0] * d[0] + o[1] * d[1] + o[2] * d[2]; const c = o[0] * o[0] + o[1] * o[1] + o[2] * o[2] - r * r; const D = b * b - c; if (D < 0) return -1; return -b + Math.sqrt(D); }
+function scatterCPU(rd, sd, mie, out) {
+  const ro = [0, S_RE + 300, 0];
+  const tmax = sSphere(ro, rd, S_RA);
+  const N = 10, M = 3, seg = tmax / N;
+  let tc = 0, odR = 0, odM = 0;
+  const sR = [0, 0, 0], sM = [0, 0, 0];
+  const mu = rd[0] * sd[0] + rd[1] * sd[1] + rd[2] * sd[2];
+  const phR = 3 / (16 * Math.PI) * (1 + mu * mu), g = 0.76;
+  const phM = 3 / (8 * Math.PI) * ((1 - g * g) * (1 + mu * mu)) / ((2 + g * g) * Math.pow(1 + g * g - 2 * g * mu, 1.5));
+  const bM = 21e-6 * mie;
+  const p = [0, 0, 0], q = [0, 0, 0];
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < 3; k++) p[k] = ro[k] + rd[k] * (tc + seg / 2);
+    const h = Math.hypot(p[0], p[1], p[2]) - S_RE;
+    const hr = Math.exp(-h / S_HR) * seg, hm = Math.exp(-h / S_HM) * seg;
+    odR += hr; odM += hm;
+    const sl = sSphere(p, sd, S_RA) / M;
+    let tcl = 0, oR = 0, oM = 0, lit = true;
+    for (let j = 0; j < M; j++) {
+      for (let k = 0; k < 3; k++) q[k] = p[k] + sd[k] * (tcl + sl / 2);
+      const hl = Math.hypot(q[0], q[1], q[2]) - S_RE;
+      if (hl < 0) { lit = false; break; }
+      oR += Math.exp(-hl / S_HR) * sl; oM += Math.exp(-hl / S_HM) * sl; tcl += sl;
+    }
+    if (lit) for (let k = 0; k < 3; k++) { const a = Math.exp(-((S_BR[k] + S_BO[k]) * (odR + oR) + bM * 1.1 * (odM + oM))); sR[k] += a * hr; sM[k] += a * hm; }
+    tc += seg;
+  }
+  for (let k = 0; k < 3; k++) out[k] = sR[k] * S_BR[k] * phR + sM[k] * bM * phM;
+  return out;
+}
+
 const C = (r, g, b) => new THREE.Color(r, g, b);
 const ZEN_DAY = C(0.16, 0.38, 0.82), HOR_DAY = C(0.62, 0.76, 0.92);
 const ZEN_SET = C(0.2, 0.25, 0.5), HOR_SET = C(1.0, 0.52, 0.28);
@@ -122,6 +204,7 @@ export class Sky {
       uGlow: { value: new THREE.Color() }, uCloudCover: { value: 0.3 }, uCloudDark: { value: 0 }, uTime: U.uTime,
       uNight: U.uNight, uFlash: U.uFlash, uStars: { value: 0 }, uCloudOffset: { value: new THREE.Vector2() },
       uTint: { value: new THREE.Color(1, 1, 1) },
+      uPhys: { value: 1 }, uSkyI: { value: 32 }, uMie: { value: 0.4 },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, vertexShader: skyVert, fragmentShader: skyFrag,
@@ -182,10 +265,30 @@ export class Sky {
     this.dayFactor = day;
     U.uNight.value = 1 - smoothstep(-0.2, 0.05, e);
 
-    const z = this._z.copy(ZEN_NIGHT).lerp(ZEN_DAY, day);
-    const h = this._h.copy(HOR_NIGHT).lerp(HOR_DAY, day);
-    z.lerp(ZEN_SET, sunset * 0.6);
-    h.lerp(HOR_SET, sunset * 0.75);
+    // physical sky colours: zenith straight up, horizon averaged around the compass
+    const mie = Math.min(3, 0.4 + (weather.fog || 0) * 0.12 + (weather.rain || 0) * 0.6 + (weather.tintAmt || 0) * 1.5);
+    this.uniforms.uMie.value = mie;
+    const sy = Math.max(this.sunDir.y, 0.025), sl = Math.hypot(this.sunDir.x, sy, this.sunDir.z);
+    const sd = [this.sunDir.x / sl, sy / sl, this.sunDir.z / sl], tmp = this._sc || (this._sc = [0, 0, 0]);
+    const twi = smoothstep(-0.2, 0.025, e);
+    const SI = this.uniforms.uSkyI.value * twi * twi;
+    scatterCPU([0, 1, 0], sd, mie, tmp);
+    const physZ = this._pz || (this._pz = new THREE.Color());
+    physZ.setRGB(tmp[0] * SI, tmp[1] * SI, tmp[2] * SI);
+    const physH = this._ph || (this._ph = new THREE.Color());
+    physH.setRGB(0, 0, 0);
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + 0.4;
+      const d = [Math.cos(a) * 0.9988, 0.05, Math.sin(a) * 0.9988];
+      scatterCPU(d, sd, mie, tmp);
+      physH.r += tmp[0] * SI / 4; physH.g += tmp[1] * SI / 4; physH.b += tmp[2] * SI / 4;
+    }
+    // blend to the hand-tuned night palette once the sun is well below the horizon
+    const phys = smoothstep(-0.26, -0.06, e);
+    this.uniforms.uPhys.value = phys;
+    if (!Number.isFinite(physZ.r + physZ.g + physZ.b + physH.r + physH.g + physH.b)) { physZ.copy(ZEN_DAY); physH.copy(HOR_DAY); }
+    const z = this._z.copy(ZEN_NIGHT).lerp(physZ, phys);
+    const h = this._h.copy(HOR_NIGHT).lerp(physH, phys);
     // weather: overcast desaturates and darkens
     const oc = clamp(weather.cloud * 1.1 - 0.35, 0, 1) * 0.85 + weather.dark * 0.15;
     const ovc = this._t.copy(OVERCAST).multiplyScalar(lerp(0.06, 1.0, day) * (1 - weather.dark * 0.55));
@@ -199,13 +302,13 @@ export class Sky {
     this.uniforms.uGlow.value.setRGB(1.0, 0.55, 0.3).multiplyScalar(sunset * (1 - oc * 0.8) * 0.9 + 0.08 * day);
     this.uniforms.uCloudCover.value = weather.cloud;
     this.uniforms.uCloudDark.value = weather.dark;
-    this.uniforms.uStars.value = U.uNight.value;
+    this.uniforms.uStars.value = 1 - smoothstep(-0.26, -0.09, e);
     this.cloudOffset.x += dt * 0.004 * (0.3 + U.uWind.value) * U.uWindDir.value.x;
     this.cloudOffset.y += dt * 0.004 * (0.3 + U.uWind.value) * U.uWindDir.value.y;
     this.uniforms.uCloudOffset.value.copy(this.cloudOffset);
 
     // Fog colour = horizon colour with slight darkening
-    this.fogColor.copy(h).multiplyScalar(0.92);
+    this.fogColor.copy(h).multiplyScalar(0.78);
     if (weather.fogTint) this.fogColor.lerp(weather.fogTint, 0.5);
 
     // Sun / moon light

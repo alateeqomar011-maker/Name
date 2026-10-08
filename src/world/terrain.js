@@ -204,6 +204,8 @@ export function createTerrainMaterial(world) {
             stoneC *= 0.75 + 0.5 * vnoise(gp * 34.0 + sid * 10.0);
             stoneC = mix(stoneC, vec3(0.06, 0.08, 0.03), smoothstep(0.6, 0.9, vnoise(gp * 9.0)) * surf.r * 0.7);
             stoneC *= 0.55 + 0.45 * sqrt(stone);
+            // stones on dark volcanic soil are basalt too, not pale pebbles
+            stoneC *= mix(0.4, 1.0, smoothstep(0.015, 0.07, dot(soil, vec3(0.3, 0.59, 0.11))));
             float sm = smoothstep(0.0, 0.18, stone) * gk;
             float ring = max(present * smoothstep(rad * 1.45, rad, pv.x), present2 * smoothstep(rad2 * 1.45, rad2, pv2.x)) * (1.0 - smoothstep(0.0, 0.2, stone));
             diffuseColor.rgb *= 1.0 - ring * 0.45 * gk;

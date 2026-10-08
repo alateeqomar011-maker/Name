@@ -920,6 +920,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
     uLowH: { value: Math.max(0.04, size * 0.05) },
     uIris: { value: predator ? new THREE.Color(0.62, 0.36, 0.04) : new THREE.Color(0.2, 0.11, 0.04) },
     uSlit: { value: predator ? 1 : 0 },
+    uBlink: { value: 0 },
   };
   m.userData.uniforms = uni;
   m.onBeforeCompile = (shader) => {
@@ -934,7 +935,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
       .replace('#include <common>', `#include <common>
         varying vec3 vBind; varying vec3 vBindN; varying float vMat;
         uniform vec3 uBase; uniform vec3 uBelly; uniform vec3 uPattern; uniform vec3 uDisplay;
-        uniform int uPatType; uniform float uPatScale; uniform float uWet; uniform float uHurt; uniform float uSkinF; uniform float uLowH; uniform vec3 uIris; uniform float uSlit;
+        uniform int uPatType; uniform float uPatScale; uniform float uWet; uniform float uHurt; uniform float uSkinF; uniform float uLowH; uniform vec3 uIris; uniform float uSlit; uniform float uBlink;
         ${GLSL_NOISE}
         float tri3(vec3 p){ return (vnoise(p.zy) + vnoise(p.xz + 7.1) + vnoise(p.xy + 3.7)) / 3.0; }
         vec2 sh22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
@@ -1020,6 +1021,9 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
           float slitW = 0.09 * sqrt(max(0.0, 1.0 - pow(ey / 0.55, 2.0)));
           float pupil = mix(1.0 - smoothstep(0.16, 0.2, rr), 1.0 - smoothstep(slitW, slitW + 0.03, abs(ex)) * step(abs(ey), 0.55), uSlit);
           col = mix(col, vec3(0.008, 0.006, 0.005), pupil * irisM);
+          // eyelids sweep down over the eye when blinking, sleeping or dead
+          float lid = step(1.0 - uBlink * 2.1, ey * 0.5 + 0.5 + (1.0 - step(0.0, ca)));
+          col = mix(col, uBase * 0.55, lid * step(0.001, uBlink));
         } else if (vMat < 1.5) {
           col = vColor.rgb;
           col *= 0.9 + 0.15 * scaleN;

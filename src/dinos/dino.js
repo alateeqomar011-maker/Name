@@ -100,6 +100,11 @@ export class Dino {
     this.scared = Math.max(0, this.scared - dt);
     this.hurtT = Math.max(0, this.hurtT - dt * 2);
     this.material.userData.uniforms.uHurt.value = this.hurtT;
+    // blinking: brief lid sweeps every few seconds; eyes stay shut in sleep and death
+    this._blinkT = (this._blinkT ?? Math.random() * 4) - dt;
+    if (this._blinkT < -0.18) this._blinkT = 2 + Math.random() * 5;
+    const shut = !this.alive || this.state === 'sleep' ? 1 : this._blinkT < 0 ? Math.sin((-this._blinkT / 0.18) * Math.PI) : 0;
+    this.material.userData.uniforms.uBlink.value = shut;
     const a = this.anim;
     a.jaw = 0; a.roar = 0; a.reach = 0; a.headYaw = 0;
 

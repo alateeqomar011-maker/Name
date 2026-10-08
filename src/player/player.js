@@ -304,8 +304,10 @@ export class Player {
       const stride = this.sprinting ? 1.6 : this.crouch ? 0.9 : 1.25;
       if (this.stepAcc > stride) {
         this.stepAcc = 0;
-        g.audio.play('step', { surface: this.surface(), vol: this.crouch ? 0.4 : this.sprinting ? 1.1 : 0.8 });
+        const surf = this.surface();
+        g.audio.play('step', { surface: surf, vol: this.crouch ? 0.4 : this.sprinting ? 1.1 : 0.8 });
         g.progress.stats.distance += stride;
+        this._footprint(surf);
       }
     }
     this._stats(dt);
@@ -322,6 +324,50 @@ export class Player {
     if (b === BIOME.SWAMP || (g.world.getNormal(P.x, P.z).y > 0.9 && g.weather && g.weather.wet > 0.5)) return 'mud';
     if (b === BIOME.MOUNTAIN || b === BIOME.VOLCANIC || g.world.getNormal(P.x, P.z).y < 0.8) return 'rock';
     return 'grass';
+  }
+
+  // boot prints pressed into snow, sand and mud (and anywhere snowy in winter)
+  _footprint(surf) {
+    const g = this.game;
+    const winter = g.season && g.season.winter > 0.6;
+    const soft = surf === 'sand' || surf === 'snow' || surf === 'mud' || (winter && surf !== 'rock');
+    if (!soft || g.caves.active || this.swimming) return;
+    if (!this._fp) {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 128;
+      const x = c.getContext('2d');
+      const blob = (cx, cy, rx, ry, a) => { const gr = x.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry)); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(0.7, `rgba(0,0,0,${a * 0.8})`); gr.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = gr; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill(); };
+      blob(32, 38, 20, 30, 0.8); // sole
+      blob(32, 98, 15, 18, 0.8); // heel
+      x.globalCompositeOperation = 'destination-out';
+      for (let k = 0; k < 7; k++) { x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(12, 18 + k * 9, 40, 3); } // tread lugs
+      const tex = new THREE.CanvasTexture(c);
+      const geo = new THREE.PlaneGeometry(0.15, 0.32);
+      geo.rotateX(-Math.PI / 2);
+      const mat = new THREE.MeshLambertMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+      const N = 180;
+      const mesh = new THREE.InstancedMesh(geo, mat, N);
+      mesh.frustumCulled = false;
+      mesh.count = 0;
+      for (let i = 0; i < N; i++) mesh.setColorAt(i, new THREE.Color(1, 1, 1));
+      g.scene.add(mesh);
+      this._fp = { mesh, i: 0, N, side: 1, m: new THREE.Matrix4(), q: new THREE.Quaternion(), c: new THREE.Color() };
+    }
+    const F = this._fp;
+    F.side = -F.side;
+    const s = Math.sin(this.yaw), co = Math.cos(this.yaw);
+    const px = this.pos.x + co * 0.12 * F.side, pz = this.pos.z - s * 0.12 * F.side;
+    const py = g.world.getHeight(px, pz) + 0.02;
+    F.q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw + Math.PI);
+    F.m.compose(new THREE.Vector3(px, py, pz), F.q, new THREE.Vector3(1, 1, 1));
+    F.mesh.setMatrixAt(F.i, F.m);
+    // snow prints read as cool blue shadows, sand and mud as darker, damp hollows
+    const col = surf === 'mud' ? [0.35, 0.3, 0.25] : (winter || surf === 'snow') ? [0.55, 0.62, 0.78] : [0.62, 0.52, 0.42];
+    F.mesh.setColorAt(F.i, F.c.setRGB(col[0], col[1], col[2]));
+    F.i = (F.i + 1) % F.N;
+    F.mesh.count = Math.max(F.mesh.count, F.i === 0 ? F.N : F.i);
+    F.mesh.instanceMatrix.needsUpdate = true;
+    F.mesh.instanceColor.needsUpdate = true;
   }
 
   _collide() {
