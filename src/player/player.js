@@ -166,7 +166,7 @@ export class Player {
       this.crouch = false;
       this.climbing = false;
       const wet = g.inventory.gear.has('wetsuit');
-      const sp = (wet ? 4.2 : 2.6) * (1 + skillClimb * 0.06) * (wantSprint ? 1.5 : 1);
+      const sp = (wet ? 4.2 : 2.6) * (1 + skillClimb * 0.06) * (wantSprint ? 1.7 : 1);
       this.vel.x = lerp(this.vel.x, dx * sp, 1 - Math.exp(-dt * 3));
       this.vel.z = lerp(this.vel.z, dz * sp, 1 - Math.exp(-dt * 3));
       let targetY = wl - 1.45;
@@ -185,7 +185,7 @@ export class Player {
       // Land
       const n = w.getNormal(P.x, P.z, _n);
       const steep = n.y < 0.64;
-      let sp = this.crouch ? 2.0 : wantSprint ? 7.8 : 4.4;
+      let sp = this.crouch ? 2.0 : wantSprint ? 10.5 : 4.4;
       sp *= 1 + 0.03 * g.progress.skill('endurance');
       if (this.hunger <= 0 || this.thirst <= 0) sp *= 0.8;
       if (g.weather && g.weather.snowDepth(P) > 0) sp *= 0.85;
@@ -213,7 +213,7 @@ export class Player {
         }
         this.vel.x = lerp(this.vel.x, tvx, accel);
         this.vel.z = lerp(this.vel.z, tvz, accel);
-        if (this.sprinting) this.stamina -= dt * 12 * (1 - 0.08 * g.progress.skill('endurance'));
+        if (this.sprinting) this.stamina -= dt * 7.5 * (1 - 0.08 * g.progress.skill('endurance'));
         if (enabled && input.hit('Space') && this.stamina > 4 && !steep) {
           this.vel.y = 6.6 + g.progress.skill('climbing') * 0.15;
           this.onGround = false;

@@ -22,7 +22,7 @@ export class UI {
       <div id="underwater"></div>
       <div id="vignette"></div>
       <div id="binoc" class="hidden"></div>
-      <div class="topleft"><div class="clock" id="clock">07:30</div><div class="sub" id="dayline">Day 1</div><div class="region" id="region"></div></div>
+      <div class="topleft"><div class="clock" id="clock">07:30</div><div class="sub" id="dayline">Day 1</div><div class="region" id="region"></div><div class="fps" id="fps"></div></div>
       <div id="compass"><div class="strip" id="cstrip"></div><div class="center"></div></div>
       <div id="minimap"><canvas id="mm" width="190" height="190"></canvas></div>
       <div class="mmlabel" id="mmlabel"></div>
@@ -733,6 +733,9 @@ export class UI {
       <label>Mouse sensitivity <input id="s-sens" type="range" min="0.0006" max="0.005" step="0.0002" value="${S.sens}"></label>
       <label>Field of view <input id="s-fov" type="range" min="55" max="95" step="1" value="${S.fov}"></label>
       <label>Invert mouse Y <input id="s-inv" type="checkbox" class="pointer" ${S.invertY ? 'checked' : ''}></label>
+      <label>Frame rate <select id="s-fps" class="pointer">${[['60', '60 FPS'], ['120', '120 FPS'], ['144', '144 FPS'], ['max', 'Unlimited']].map(([v, n]) => `<option value="${v}" ${String(S.fpsTarget ?? 120) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+      <label>Show FPS counter <input id="s-showfps" type="checkbox" class="pointer" ${S.showFps !== false ? 'checked' : ''}></label>
+      <p style="color:var(--muted);font-size:11px;margin:-4px 0 4px">Your screen refreshes at ${g.refreshHz || 60} Hz${(g.refreshHz || 60) < 120 ? ' — the game can\'t show more frames than that, so 120 FPS needs a 120 Hz display' : ''}. Resolution and effects adjust automatically to hold the target.</p>
       <label>Day length (minutes) <select id="s-day" class="pointer">${[12, 24, 48, 96].map((d) => `<option ${S.dayLength === d ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
       <div style="display:flex;gap:10px;margin-top:10px"><button class="btn pointer" data-act="save">Save Game</button><button class="btn pointer" data-act="close">Resume</button><button class="btn pointer" data-act="newgame">New Expedition</button></div>
       <p style="color:var(--muted);font-size:12px">The game autosaves every minute and when you sleep.</p>
@@ -749,5 +752,7 @@ export class UI {
     $('#s-fov').oninput = (e) => { S.fov = +e.target.value; g.applySettings(); };
     $('#s-inv').onchange = (e) => { S.invertY = e.target.checked; g.applySettings(); };
     $('#s-day').onchange = (e) => { S.dayLength = +e.target.value; g.applySettings(); };
+    $('#s-fps').onchange = (e) => { S.fpsTarget = e.target.value === 'max' ? 'max' : +e.target.value; g.applySettings(); };
+    $('#s-showfps').onchange = (e) => { S.showFps = e.target.checked; g.applySettings(); };
   }
 }

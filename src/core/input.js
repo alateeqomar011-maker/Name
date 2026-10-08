@@ -42,10 +42,12 @@ export class Input {
     });
   }
   lock() {
+    // raw mouse input (no OS acceleration / smoothing) where supported: the most direct aim
+    const plain = () => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { /* ignore */ } };
     try {
-      const p = this.canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});
-    } catch (e) { /* ignore */ }
+      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
+      if (p && p.catch) p.catch(() => plain());
+    } catch (e) { plain(); }
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
   down(code) {
@@ -59,7 +61,6 @@ export class Input {
     if (code === 'KeyS') return j.y > t;
     if (code === 'KeyA') return j.x < -t;
     if (code === 'KeyD') return j.x > t;
-    if (code === 'ShiftLeft') return Math.hypot(j.x, j.y) > 0.95;
     return false;
   }
   hit(code) { return this.pressed.has(code); }

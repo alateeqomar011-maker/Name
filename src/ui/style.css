@@ -380,3 +380,28 @@ h4 { margin: 18px 0 8px; font-size: 12px; color: var(--muted); letter-spacing: 0
   #takeBtn { right: 92px; bottom: 60px; width: 58px; height: 58px; }
   #takeBtn .i { font-size: 20px; } #takeBtn .t { font-size: 8px; }
 }
+/* frame-rate counter under the clock */
+.topleft .fps { margin-top: 4px; font: 700 11px/1 var(--sans); letter-spacing: 0.06em; display: inline-block; padding: 3px 7px; border-radius: 9px; background: rgba(0,0,0,0.45); }
+.topleft .fps:empty { display: none; }
+.topleft .fps.good { color: #8fe39a; } .topleft .fps.ok { color: #f2d27a; } .topleft .fps.low { color: #ff8a7a; }
+/* jump button (touch) and sprint feedback */
+#jumpBtn { position: fixed; right: 40px; bottom: 58px; z-index: 15; width: 92px; height: 92px; border-radius: 50%; touch-action: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; user-select: none;
+  background: radial-gradient(circle at 35% 30%, rgba(60,56,44,0.75), rgba(14,13,10,0.8)); border: 2px solid rgba(232,196,106,0.5);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45); }
+#jumpBtn .i { font-size: 34px; line-height: 0.9; color: var(--gold2); }
+#jumpBtn .t { font-family: var(--display); font-size: 11px; letter-spacing: 0.12em; color: var(--ink); }
+#jumpBtn.on { background: radial-gradient(circle at 35% 30%, #f5dc9a, #b8913a); border-color: #fff3c2; transform: scale(0.94); }
+#jumpBtn.on .t, #jumpBtn.on .i { color: #2a2010; }
+#sprintBtn { bottom: 168px; }
+#takeBtn { right: 150px; bottom: 96px; }
+#sprintBtn.on.running { animation: sprintPulse 0.6s ease-in-out infinite alternate; }
+@keyframes sprintPulse { from { box-shadow: 0 0 14px rgba(232,196,106,0.5); } to { box-shadow: 0 0 30px rgba(255,220,120,0.95); } }
+#sprintBtn.on.tired { background: radial-gradient(circle at 35% 30%, #8a7a5a, #4a3e26); border-color: rgba(255,140,110,0.8); animation: none; }
+#sprintBtn.on.tired .t::after { content: ' · TIRED'; }
+@media (max-height: 520px), (max-width: 700px) {
+  #jumpBtn { right: 16px; bottom: 22px; width: 66px; height: 66px; }
+  #jumpBtn .i { font-size: 26px; } #jumpBtn .t { font-size: 8px; }
+  #sprintBtn { right: 16px; bottom: 100px; width: 58px; height: 58px; }
+  #takeBtn { right: 92px; bottom: 26px; width: 58px; height: 58px; }
+}

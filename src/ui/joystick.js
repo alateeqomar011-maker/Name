@@ -31,7 +31,7 @@ export class Joystick {
       e.preventDefault();
       e.stopPropagation();
       this.pid = e.pointerId;
-      el.setPointerCapture(e.pointerId);
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-lifted pointer */ }
       input.joy.active = true;
       el.classList.add('on');
       move(e);
@@ -52,6 +52,25 @@ export class Joystick {
       sb.classList.toggle('on', input.sprintToggle);
     });
     sb.addEventListener('click', (e) => e.stopPropagation());
+    // Jump button: acts like the Space key (tap to jump or toggle the glider, hold to swim up)
+    const jb = (this.jumpBtn = document.createElement('div'));
+    jb.id = 'jumpBtn';
+    jb.innerHTML = '<span class="i">⤒</span><span class="t">JUMP</span>';
+    document.body.appendChild(jb);
+    let jid = null;
+    const jrelease = () => { jid = null; input.keys.delete('Space'); jb.classList.remove('on'); };
+    jb.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      jid = e.pointerId;
+      try { jb.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-lifted pointer */ }
+      if (!input.keys.has('Space')) input.pressed.add('Space');
+      input.keys.add('Space');
+      jb.classList.add('on');
+    });
+    jb.addEventListener('pointerup', (e) => { if (e.pointerId === jid) jrelease(); });
+    jb.addEventListener('pointercancel', jrelease);
+    jb.addEventListener('click', (e) => e.stopPropagation());
     // Take / use button: acts like holding the E key, so tap to pick up and hold to gather
     const tb = (this.takeBtn = document.createElement('div'));
     tb.id = 'takeBtn';
@@ -63,7 +82,7 @@ export class Joystick {
       e.preventDefault();
       e.stopPropagation();
       tid = e.pointerId;
-      tb.setPointerCapture(e.pointerId);
+      try { tb.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already-lifted pointer */ }
       if (!input.keys.has('KeyE')) input.pressed.add('KeyE');
       input.keys.add('KeyE');
       tb.classList.add('on');
@@ -93,10 +112,17 @@ export class Joystick {
     if (t.textContent !== label) t.textContent = label;
     this.takeBtn.classList.toggle('ready', !!cur && !cur.disabled && cur.key !== 'F');
   }
+  // Sprint button shows when the explorer is out of breath (sprint resumes once stamina recovers)
+  setSprintState(player) {
+    const tired = !!this.input.sprintToggle && player.stamina <= 5;
+    this.sprintBtn.classList.toggle('tired', tired);
+    this.sprintBtn.classList.toggle('running', !!player.sprinting);
+  }
   setVisible(v) {
     this.el.style.display = v ? '' : 'none';
     this.sprintBtn.style.display = v ? '' : 'none';
     this.takeBtn.style.display = v ? '' : 'none';
+    this.jumpBtn.style.display = v ? '' : 'none';
     this.sprintBtn.classList.toggle('on', !!this.input.sprintToggle);
   }
 }

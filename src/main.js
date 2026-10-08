@@ -113,14 +113,16 @@ class Game extends Emitter {
     this.state = 'loading';
     // phones and tablets start on medium; desktops on high (the dynamic resolution governor adapts further)
     const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
-    this.settings = { quality: coarse ? 'medium' : 'high', volume: 0.8, music: 0.5, sens: 0.0022, fov: 70, invertY: false, dayLength: 24 };
+    this.settings = { quality: coarse ? 'medium' : 'high', volume: 0.8, music: 0.5, sens: 0.0022, fov: 70, invertY: false, dayLength: 24, fpsTarget: 120, showFps: true };
     try { Object.assign(this.settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) { /* ignore */ }
     this.quality = { ...QUALITY[this.settings.quality] };
   }
 
   async boot() {
     const canvas = document.getElementById('game');
-    const renderer = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' }));
+    // every frame goes through the composer's render targets, so MSAA on the canvas itself is wasted work
+    const renderer = (this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' }));
+    renderer.shadowMap.autoUpdate = false; // refreshed on a schedule by _render (see _shadowSchedule)
     renderer.setPixelRatio(this._targetPixelRatio());
     renderer.setSize(innerWidth, innerHeight);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -336,8 +338,10 @@ class Game extends Emitter {
       if (this.impostors) this.impostors.reset();
     }
     this.sky.setShadowQuality(this.quality.shadow, this.quality.shadows, this.quality.shadowExtent || 180);
+    this._shadowDirty = true;
+    if (qualityChanged) { this.perfLevel = 0; this._applyPerf(); }
     if (this.bloom) this.bloom.enabled = this.quality.bloom;
-    if (this.waterPass) this.waterPass.ao = !!this.quality.bloom;
+    if (this.waterPass) this.waterPass.ao = !!this.quality.bloom && (this.perfLevel || 0) < 2;
     this.audio.setVolume(S.volume);
     this.audio.setMusicVolume(S.music);
     this.input.sensitivity = S.sens;
@@ -358,19 +362,92 @@ class Game extends Emitter {
     return Math.max(0.45, Math.min(window.devicePixelRatio, this.quality.pixelRatio) * (this.resScale || 1));
   }
 
-  // Dynamic resolution: keep frame times near target by stepping the render scale with hysteresis.
-  _governResolution(rawDt) {
+  // ---------- Frame-rate governor ----------
+  // The browser presents at most one frame per display refresh, so the achievable rate is
+  // min(target, refresh). The display rate is estimated from the fastest recent frame intervals.
+  _trackRefresh(rawDt) {
+    const buf = (this._dtBuf = this._dtBuf || []);
+    buf.push(rawDt * 1000);
+    if (buf.length < 120) return;
+    const sorted = buf.slice().sort((a, b) => a - b);
+    const fast = sorted[Math.floor(sorted.length * 0.1)];
+    buf.length = 0;
+    const hz = 1000 / Math.max(fast, 1);
+    const rates = [30, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240];
+    let best = 60;
+    for (const r of rates) if (Math.abs(r - hz) < Math.abs(best - hz)) best = r;
+    // only ever raise the estimate quickly; lower it after repeated evidence
+    if (!this.refreshHz || best > this.refreshHz) this.refreshHz = best;
+    else if (best < this.refreshHz) { this._lowRefresh = (this._lowRefresh || 0) + 1; if (this._lowRefresh > 4) { this.refreshHz = best; this._lowRefresh = 0; } }
+    else this._lowRefresh = 0;
+  }
+
+  get fpsGoal() {
+    const t = this.settings.fpsTarget === 'max' ? 1000 : +this.settings.fpsTarget || 120;
+    return Math.max(30, Math.min(t, this.refreshHz || 60));
+  }
+
+  // Dynamic resolution and effect scaling to hold the frame-rate goal. Resolution moves first;
+  // once it bottoms out, effects step down one at a time (lens, ambient occlusion, grass density,
+  // shadow resolution) and come back when there is headroom again.
+  _governResolution(rawDt, workMs) {
     if (!this.composer || this.state !== 'playing' || document.hidden || rawDt > 0.25) return;
     this.resScale = this.resScale || 1;
-    this._ft = this._ft === undefined ? rawDt : this._ft * 0.95 + rawDt * 0.05;
+    this.perfLevel = this.perfLevel || 0;
+    this._ft = this._ft === undefined ? rawDt : this._ft * 0.92 + rawDt * 0.08;
     this._resT = (this._resT || 0) + rawDt;
-    if (this._resT < 3) return;
+    this._cool = Math.max(0, (this._cool || 0) - rawDt);
+    if (this._resT < 1.5) return;
+    const budget = 1000 / this.fpsGoal;
     const ms = this._ft * 1000;
-    let next = this.resScale;
-    if (ms > 24) next = Math.max(0.6, this.resScale - 0.1);
-    else if (ms < 14.5) next = Math.min(1, this.resScale + 0.05);
+    let next = this.resScale, lvl = this.perfLevel;
+    if (ms > budget * 1.12) {
+      if (this.resScale > 0.55) next = Math.max(0.55, this.resScale - 0.08);
+      else lvl = Math.min(4, lvl + 1);
+      this._cool = 6;
+    } else if (ms < budget * 1.04 && workMs < budget * 0.55 && this._cool <= 0) {
+      // on target with spare CPU time: try a little more quality
+      if (lvl > 0) lvl--;
+      else if (this.resScale < 1) next = Math.min(1, this.resScale + 0.04);
+      this._cool = 3;
+    }
+    if (lvl !== this.perfLevel) { this.perfLevel = lvl; this._applyPerf(); this._resT = 0; }
     if (Math.abs(next - this.resScale) > 0.001) { this.resScale = next; this._resT = 0; this.resize(); }
-    else this._resT = 2;
+    else this._resT = 1.0;
+  }
+
+  _applyPerf() {
+    const L = this.perfLevel || 0;
+    this._perfNoLens = L >= 1;
+    if (this.waterPass) this.waterPass.ao = !!this.quality.bloom && L < 2;
+    if (this.grass && this.grass.mesh) {
+      const g = this.grass.mesh.geometry;
+      g._fullCount = g._fullCount || g.instanceCount;
+      g.instanceCount = Math.floor(g._fullCount * (L >= 3 ? 0.55 : 1));
+    }
+    const want = L >= 4 ? Math.min(2048, this.quality.shadow) : this.quality.shadow;
+    if (this.sky && this.sky.sun.shadow.mapSize.x !== want) this.sky.setShadowQuality(want, this.quality.shadows, this.quality.shadowExtent || 180);
+  }
+
+  // The sun's shadow map is re-rendered every frame at 60 fps and every other frame above that
+  // (8 ms of lag on moving shadows is invisible, and it halves the shadow cost).
+  _shadowSchedule() {
+    this._sf = (this._sf || 0) + 1;
+    const every = this.fpsGoal > 75 ? 2 : 1;
+    if (this._sf % every === 0 || this._shadowDirty) { this.renderer.shadowMap.needsUpdate = true; this._shadowDirty = false; }
+  }
+
+  _fpsMeter(rawDt) {
+    this._fpsN = (this._fpsN || 0) + 1;
+    this._fpsT = (this._fpsT || 0) + rawDt;
+    if (this._fpsT < 0.5) return;
+    const fps = this._fpsN / this._fpsT;
+    this._fpsN = 0; this._fpsT = 0;
+    const el = document.getElementById('fps');
+    if (!el) return;
+    el.style.display = this.settings.showFps === false ? 'none' : '';
+    el.textContent = `${Math.round(fps)} FPS`;
+    el.className = 'fps ' + (fps >= this.fpsGoal * 0.92 ? 'good' : fps >= this.fpsGoal * 0.6 ? 'ok' : 'low');
   }
 
   requestCapture(cb) { this._capture = cb; }
@@ -385,6 +462,8 @@ class Game extends Emitter {
     else if (this.state === 'playing') this._playFrame(dt);
     this._render(dt);
     this.input.endFrame();
+    // CPU time spent on this frame (simulation + draw submission), used to judge headroom
+    this._workMs = performance.now() - now;
   }
 
   _titleCam(t) {
@@ -491,6 +570,7 @@ class Game extends Emitter {
     this.build.update(dt, I);
     if (!this.build.active) this.interact.update(dt, I);
     this.joystick.setTakeLabel(this.build.active ? null : this.interact.current);
+    this.joystick.setSprintState(this.player);
     this.interact.updateProjectiles(dt);
     // tracker refresh
     if (this.tracking) { const h = this.tracking.herd; if (h.count <= 0) this.tracking = null; else { this.tracking.x = h.x; this.tracking.z = h.z; } }
@@ -566,7 +646,7 @@ class Game extends Emitter {
       const lens = this.quality.lens ?? 0;
       const arriving = this.cam.arrival ? 1 : 0;
       const photo = this.player.photoMode ? 1 : 0;
-      this.cine.enabled = lens > 0 && !this.cam.underwater;
+      this.cine.enabled = lens > 0 && !this.cam.underwater && !this._perfNoLens;
       this.cine.setup(focus, lens * (1 + arriving * 0.6 + photo * 0.4), 1 + photo, (this.settings.motionBlur === false ? 0 : 1) * (lens > 0.5 ? 1 : 0.6), dt);
     }
     const G = this.grade.uniforms;
@@ -678,8 +758,14 @@ class Game extends Emitter {
 
   _render(dt) {
     const now = performance.now();
-    if (this._lastRenderT) this._governResolution((now - this._lastRenderT) / 1000);
+    if (this._lastRenderT) {
+      const raw = (now - this._lastRenderT) / 1000;
+      this._trackRefresh(raw);
+      this._fpsMeter(raw);
+      this._governResolution(raw, this._workMs || 0);
+    }
     this._lastRenderT = now;
+    this._shadowSchedule();
     if (this.quality.bloom || true) this.composer.render(dt);
     if (this._capture) {
       const cb = this._capture;
