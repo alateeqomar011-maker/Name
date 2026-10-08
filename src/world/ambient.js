@@ -128,12 +128,12 @@ export class AmbientLife {
     leafGeo.setIndex([0, 1, 2, 0, 2, 3]);
     leafGeo.computeVertexNormals();
     const leafMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, side: THREE.DoubleSide });
-    this.leafMesh = new THREE.InstancedMesh(leafGeo, leafMat, 70);
+    this.LEAVES = 220;
+    this.leafMesh = new THREE.InstancedMesh(leafGeo, leafMat, this.LEAVES);
     this.leafMesh.frustumCulled = false;
-    const lcols = [0x6a7a2a, 0x8a6a2a, 0x9a5a22, 0x4a6a22, 0xa08030];
-    for (let i = 0; i < 70; i++) this.leafMesh.setColorAt(i, new THREE.Color(lcols[i % lcols.length]));
     this.group.add(this.leafMesh);
-    this.leaves = Array.from({ length: 70 }, () => ({ p: new THREE.Vector3(), rot: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6), spin: new THREE.Vector3(rnd(-3, 3), rnd(-3, 3), rnd(-3, 3)), live: false, ph: Math.random() * 6 }));
+    this.leaves = Array.from({ length: this.LEAVES }, () => ({ p: new THREE.Vector3(), rot: new THREE.Vector3(Math.random() * 6, Math.random() * 6, Math.random() * 6), spin: new THREE.Vector3(rnd(-3, 3), rnd(-3, 3), rnd(-3, 3)), live: false, ph: Math.random() * 6 }));
+    this.onSeason(game.settings.season || 'summer');
     // Fish
     const fishGeo = new THREE.ConeGeometry(0.12, 0.7, 6);
     fishGeo.rotateX(Math.PI / 2);
@@ -143,6 +143,15 @@ export class AmbientLife {
     this.group.add(this.fishMesh);
     this.fishJump = null;
     this.fishT = 4;
+  }
+
+  // seasonal palette for drifting leaves
+  onSeason(id) {
+    this.season = id;
+    const cols = id === 'autumn' ? [0xb5501a, 0xd4861e, 0x9a2e12, 0xc9a22a, 0x7a4418, 0xe0a030] : [0x6a7a2a, 0x8a6a2a, 0x9a5a22, 0x4a6a22, 0xa08030];
+    const c = new THREE.Color();
+    for (let i = 0; i < this.LEAVES; i++) this.leafMesh.setColorAt(i, c.set(cols[(i * 7) % cols.length]).multiplyScalar(0.8 + ((i * 37) % 10) * 0.04));
+    this.leafMesh.instanceColor.needsUpdate = true;
   }
 
   _hideInstances(mesh, from = 0) {
@@ -166,6 +175,7 @@ export class AmbientLife {
     // ---- Birds ----
     let bi = 0;
     const birdsOn = day > 0.35 && rain < 0.5;
+    const cold = this.season === 'winter';
     for (const F of this.flocks) {
       F.retarget -= dt;
       if (F.retarget <= 0 || Math.hypot(F.cx - P.x, F.cz - P.z) > 500) { F.retarget = rnd(30, 70); F.cx = P.x + rnd(-150, 150); F.cz = P.z + rnd(-150, 150); }
@@ -184,7 +194,7 @@ export class AmbientLife {
     this.birdMesh.instanceMatrix.needsUpdate = true;
 
     // ---- Butterflies (meadows & forest edges, daytime, calm weather) ----
-    const bflyOk = day > 0.45 && rain < 0.2 && [BIOME.GRASSLAND, BIOME.FOREST, BIOME.JUNGLE, BIOME.ISLAND, BIOME.MOUNTAIN, BIOME.SWAMP].includes(b);
+    const bflyOk = !cold && day > 0.45 && rain < 0.2 && [BIOME.GRASSLAND, BIOME.FOREST, BIOME.JUNGLE, BIOME.ISLAND, BIOME.MOUNTAIN, BIOME.SWAMP].includes(b);
     this.bflies.forEach((f, i) => {
       if (!f.live || f.pos.distanceTo(P) > 30) {
         if (!bflyOk) { f.live = false; _m.makeScale(0, 0, 0); this.bflyMesh.setMatrixAt(i, _m); return; }
@@ -211,7 +221,7 @@ export class AmbientLife {
 
     // ---- Dragonflies over rivers and marsh ----
     const river = w.riverAt(P.x, P.z) || w.gen.riverQuery(P.x, P.z, {});
-    const nearWater = (river && river.dist !== undefined && river.dist < 60) || b === BIOME.SWAMP;
+    const nearWater = !cold && ((river && river.dist !== undefined && river.dist < 60) || b === BIOME.SWAMP);
     this.dflies.forEach((f, i) => {
       if (!nearWater || day < 0.3 || rain > 0.3) { f.live = false; _m.makeScale(0, 0, 0); this.dflyMesh.setMatrixAt(i, _m); return; }
       if (!f.live || f.pos.distanceTo(P) > 45) {
@@ -239,7 +249,7 @@ export class AmbientLife {
     this.dflyMesh.instanceMatrix.needsUpdate = true;
 
     // ---- Fireflies (night, vegetated land) ----
-    const fireOk = day < 0.25 && rain < 0.3 && ![BIOME.DESERT, BIOME.CANYON, BIOME.SNOW, BIOME.VOLCANIC, BIOME.OCEAN].includes(b);
+    const fireOk = !cold && day < 0.25 && rain < 0.3 && ![BIOME.DESERT, BIOME.CANYON, BIOME.SNOW, BIOME.VOLCANIC, BIOME.OCEAN].includes(b);
     {
       const pa = this.fire.geometry.attributes.position, aa = this.fire.geometry.attributes.alpha;
       this.fireData.forEach((f, i) => {
@@ -279,9 +289,15 @@ export class AmbientLife {
     }
 
     // ---- Falling leaves under canopies ----
-    const canopy = w.getVeg(P.x, P.z) > 0.45 && [BIOME.FOREST, BIOME.PINEFOREST, BIOME.JUNGLE, BIOME.SWAMP].includes(b);
+    // falling leaves under canopies; in autumn they drift down wherever there are trees, and in far greater numbers
+    const autumn = this.season === 'autumn';
+    const winter = this.season === 'winter';
+    const canopy = !winter && (autumn
+      ? w.getVeg(P.x, P.z) > 0.12 && ![BIOME.DESERT, BIOME.CANYON, BIOME.VOLCANIC, BIOME.SNOW, BIOME.BEACH, BIOME.OCEAN].includes(b)
+      : w.getVeg(P.x, P.z) > 0.45 && [BIOME.FOREST, BIOME.PINEFOREST, BIOME.JUNGLE, BIOME.SWAMP].includes(b));
+    const nLeaves = autumn ? this.LEAVES : 70;
     this.leaves.forEach((L, i) => {
-      if (!canopy) { L.live = false; _m.makeScale(0, 0, 0); this.leafMesh.setMatrixAt(i, _m); return; }
+      if (!canopy || i >= nLeaves) { L.live = false; _m.makeScale(0, 0, 0); this.leafMesh.setMatrixAt(i, _m); return; }
       const gh = w.getHeight(L.p.x, L.p.z);
       if (!L.live || L.p.y < gh + 0.03 || L.p.distanceTo(cam) > 28) {
         L.p.set(cam.x + rnd(-20, 20), w.getHeight(cam.x, cam.z) + rnd(6, 16), cam.z + rnd(-20, 20));

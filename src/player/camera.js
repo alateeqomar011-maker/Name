@@ -25,6 +25,9 @@ export class CameraRig {
 
   shake(a) { this.trauma = Math.min(1, this.trauma + a); }
 
+  // cinematic arrival after fast travel: swoop down from above and behind onto the player
+  startArrival(dur = 3.4) { this.arrival = { t: 0, dur }; this._boom = undefined; }
+
   toggle() {
     this.mode = this.mode === 'first' ? 'third' : 'first';
     this.game.ui.notify(this.mode === 'first' ? 'First-person view' : 'Third-person view', 'info', 1.5);
@@ -77,7 +80,27 @@ export class CameraRig {
         const h = g.caves.active ? g.caves.ceilingClamp(x, y, z) : g.world.getHeight(x, z) + 0.4;
         if (y < h) { best = Math.max(g.caves.active ? 0.6 : 2.4, dist * (t - 0.12)); break; }
       }
+      // keep the boom out of tree trunks: stop just in front of any trunk between player and camera
+      if (!g.caves.active && g.veg) {
+        const dx = D.x - T.x, dz = D.z - T.z, L2 = dx * dx + dz * dz;
+        if (L2 > 1e-4) {
+          g.veg.forEachNear(T.x, T.z, dist + 3, (it) => {
+            if (it.kind !== 'tree' || !it.alive) return;
+            const r = Math.max(0.3, it.radius) + 0.35;
+            const t = clamp(((it.x - T.x) * dx + (it.z - T.z) * dz) / L2, 0, 1);
+            const cx = T.x + dx * t - it.x, cz = T.z + dz * t - it.z;
+            const d2 = cx * cx + cz * cz;
+            if (d2 >= r * r) return;
+            if (lerp(T.y, D.y, t) > it.y + it.height * 0.9) return;
+            const tin = Math.max(0, t - Math.sqrt(r * r - d2) / Math.sqrt(L2));
+            best = Math.min(best, Math.max(0.8, dist * tin));
+          });
+        }
+      }
       if (g.caves.active) best = Math.min(best, g.caves.maxBoom());
+      // shrink instantly when blocked, ease back out when clear
+      this._boom = this._boom === undefined ? best : best < this._boom ? best : lerp(this._boom, best, 1 - Math.exp(-dt * 4));
+      best = this._boom;
       cam.position.copy(T).addScaledVector(fwd, -best).addScaledVector(right, -side * (best / dist));
       const hmin = g.caves.active ? -Infinity : g.world.getHeight(cam.position.x, cam.position.z) + 0.3;
       if (cam.position.y < hmin) cam.position.y = hmin;
@@ -94,6 +117,18 @@ export class CameraRig {
 
     const lookT = this._lookT || (this._lookT = new THREE.Vector3());
     lookT.copy(cam.position).add(fwd);
+    if (this.arrival) {
+      const A = this.arrival;
+      A.t += Math.min(dt, 0.05);
+      const k = Math.min(1, A.t / A.dur);
+      const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      const start = T.clone().add(new THREE.Vector3(-Math.sin(this.yaw) * 42, 30, -Math.cos(this.yaw) * 42));
+      start.y = Math.max(start.y, g.world.getHeight(start.x, start.z) + 10);
+      const fin = cam.position.clone();
+      cam.position.lerpVectors(start, fin, e);
+      lookT.lerpVectors(T, fin.add(fwd), e * e);
+      if (k >= 1) this.arrival = null;
+    }
     cam.lookAt(lookT);
     // shake
     if (this.trauma > 0) {

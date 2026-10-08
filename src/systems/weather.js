@@ -177,6 +177,13 @@ export class Weather {
       o.fog += k * (base.rain > 0 ? 2 : 0.3);
       if (o.snow > 0.3) { this.precipLabel = o.snow > 0.7 && base.wind > 0.9 ? 'Blizzard' : 'Snow'; this.precipIcon = '🌨️'; }
     }
+    // winter: precipitation falls as snow and gentle flurries drift even under clear skies
+    const wint = U.uWinter.value;
+    if (wint > 0.05 && b !== BIOME.DESERT && b !== BIOME.CANYON && b !== BIOME.VOLCANIC) {
+      o.snow = Math.max(o.snow, (0.16 + o.rain * 0.9) * wint);
+      o.rain *= 1 - wint;
+      if (o.snow > 0.3) { this.precipLabel = o.snow > 0.7 && base.wind > 0.9 ? 'Blizzard' : 'Snow'; this.precipIcon = '🌨️'; }
+    }
     return o;
   }
 

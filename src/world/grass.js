@@ -61,11 +61,13 @@ export class Grass {
       shader.uniforms.uWindDir = U.uWindDir;
       shader.uniforms.uSnow = U.uSnow;
       shader.uniforms.uWet = U.uWet;
+      shader.uniforms.uAutumn = U.uAutumn;
+      shader.uniforms.uWinter = U.uWinter;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', `#include <common>
           attribute vec3 aOffset;
           uniform sampler2D uGroundTex; uniform float uTileSize; uniform vec2 uCam;
-          uniform float uTime; uniform float uWind; uniform vec2 uWindDir; uniform float uSnow;
+          uniform float uTime; uniform float uWind; uniform vec2 uWindDir; uniform float uSnow; uniform float uAutumn; uniform float uWinter;
           varying vec3 vGrassCol; varying float vTip;
           ${GLSL_HEIGHT}
           ${GLSL_NOISE}
@@ -80,7 +82,7 @@ export class Grass {
           float fade = 1.0 - smoothstep(uTileSize * 0.32, uTileSize * 0.5, dist);
           float dens = g.a * fade;
           float keep = step(aOffset.z, dens);
-          float scl = keep * (0.55 + 0.6 * aOffset.z + 0.5 * vnoise(wp * 0.15)) * (0.4 + 0.6 * fade);
+          float scl = keep * (0.55 + 0.6 * aOffset.z + 0.5 * vnoise(wp * 0.15)) * (0.4 + 0.6 * fade) * (1.0 - uWinter * 0.6);
           float h = worldHeight(wp);
           float ang = aOffset.z * 40.0;
           float ca = cos(ang), sa = sin(ang);
@@ -100,9 +102,12 @@ export class Grass {
           base = mix(base, vec3(0.075, 0.13, 0.03), mv.x * 0.55 * step(base.g, base.r * 1.6 + 0.2));
           base = mix(base, base * vec3(1.45, 1.12, 0.5) + vec3(0.03, 0.018, 0.0), mv.y * 0.55 * grassy);
           base *= vec3(0.9 + 0.2 * aOffset.z, 0.92 + 0.16 * fract(aOffset.z * 7.3), 0.9);
+          // seasons: autumn straw-gold, winter dead brown stems poking through snow
+          base = mix(base, base * vec3(1.6, 1.0, 0.38) + vec3(0.035, 0.016, 0.0), uAutumn * (0.72 + 0.25 * aOffset.z));
+          base = mix(base, vec3(0.12, 0.1, 0.065), uWinter * 0.65);
           vec3 tipC = base * vec3(1.08, 1.22, 0.9) + vec3(0.02, 0.026, 0.004);
           vGrassCol = mix(base * 0.5, tipC, t) * (0.85 + 0.3 * vnoise(wp * 0.08));
-          vGrassCol = mix(vGrassCol, vec3(0.85, 0.88, 0.92), uSnow * 0.6 * t);
+          vGrassCol = mix(vGrassCol, vec3(0.66, 0.69, 0.74), max(uSnow, uWinter * 0.55) * 0.6 * t);
           vTip = t;
         `);
       shader.fragmentShader = shader.fragmentShader
@@ -110,7 +115,7 @@ export class Grass {
           varying vec3 vGrassCol; varying float vTip;`)
         .replace('#include <color_fragment>', `diffuseColor.rgb = vGrassCol;`);
     };
-    mat.customProgramCacheKey = () => 'grass-v2';
+    mat.customProgramCacheKey = () => 'grass-v3';
     { const _obc = mat.onBeforeCompile; mat.onBeforeCompile = (s) => { _obc(s); atmospherePatch(s); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n' + TRANSLUCENCY(0.6, 0.35)); }; }
     this.mesh = new THREE.Mesh(geo, mat);
     this.mesh.frustumCulled = false;

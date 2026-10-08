@@ -24,6 +24,7 @@ import { Water } from './world/water.js';
 import { POIs } from './world/pois.js';
 import { Caves } from './world/caves.js';
 import { AmbientLife } from './world/ambient.js';
+import { Volcano } from './world/volcano.js';
 import { DinoManager } from './dinos/manager.js';
 import { SPECIES, SPECIES_LIST } from './dinos/species.js';
 import { Player } from './player/player.js';
@@ -42,6 +43,8 @@ import { Interaction } from './systems/interact.js';
 import { FX } from './systems/fx.js';
 import { UI } from './ui/ui.js';
 import { Joystick } from './ui/joystick.js';
+import { Teleporter } from './systems/teleport.js';
+import { Seasons } from './systems/season.js';
 
 const SAVE_KEY = 'primeval-frontier-save-v1';
 const SETTINGS_KEY = 'primeval-frontier-settings';
@@ -165,7 +168,11 @@ class Game extends Emitter {
     this.interact = new Interaction(this);
     this.joystick = new Joystick(this.input);
     this.joystick.setVisible(false);
+    this.season = new Seasons(this);
     this.ambient = new AmbientLife(this);
+    this.volcano = new Volcano(this);
+    this.teleporter = new Teleporter(this);
+    this.teleporter.setVisible(false);
     await step(62, 'Raising ancient ruins…');
     this.pois = new POIs(this);
     this.pois.generate();
@@ -401,6 +408,7 @@ class Game extends Emitter {
       else ui.notify('You need a headlamp (craft at a workbench).', 'warn', 2);
     }
     if (I.hit('KeyT')) this._cycleTracker();
+    if (I.hit('KeyY')) { this.teleporter.open('travel'); return; }
     if (I.hit('KeyG')) this._summonKey();
     for (let i = 0; i < 5; i++) if (I.hit('Digit' + (i + 1))) { this.inventory.selected = i; this.audio.play('ui'); }
     if (I.hit('KeyU')) { const s = this.build.nearest(4.5); if (s) this.build.upgrade(s); }
@@ -450,6 +458,7 @@ class Game extends Emitter {
     this._hotkeys();
     const paused = ui.menuOpen || ui.modal;
     this.joystick.setVisible(!paused && this.player.alive);
+    this.teleporter.setVisible(!paused && this.player.alive && !this.player.photoMode);
     if (paused) return;
     U.uTime.value += dt;
     const { wrapped } = this.clock.tick(dt);
@@ -519,6 +528,8 @@ class Game extends Emitter {
     this.pois.update(dt);
     this.fx.update(dt);
     this.ambient.update(dt, P);
+    this.volcano.update(dt);
+    this.season.update(dt);
     // audio environment
     if (!title) this._audioEnv(dt);
     // grading
@@ -537,7 +548,8 @@ class Game extends Emitter {
     G.uWet.value = !title && this.cam.mode === 'first' && !inCave && !this.player.inVehicle ? this.weather.local.rain * 0.8 : 0;
     G.uPhoto.value = this.player.photoMode ? 1 : 0;
     G.uWarm.value = this.sky.dayFactor * (1 - this.weather.local.cloud);
-    this.renderer.toneMappingExposure = inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5;
+    // snow throws back far more light: expose a touch lower in winter
+    this.renderer.toneMappingExposure = (inCave ? 1.5 : 0.95 + (1 - this.sky.dayFactor) * 0.5) * (1 - U.uWinter.value * 0.2);
   }
 
   _audioEnv(dt) {
@@ -568,7 +580,7 @@ class Game extends Emitter {
     const hunters = this.dinos.active.some((d) => d.state === 'hunt' && d.prey === 'player');
     this.audio.update(dt, {
       ...E, wind: this.weather.local.wind, rain: this.caves.active ? 0 : this.weather.local.rain, inCave: !!this.caves.active, underwater: this.cam.underwater, altitude: P.y,
-      dayFactor: this.sky.dayFactor, danger: hunters ? 1 : 0, fire: this.audio.fire || 0, rumble: (this.audio.rumble || 0) + this.events.shake * 0.5, underRoof: false,
+      dayFactor: this.sky.dayFactor, danger: hunters ? 1 : 0, fire: this.audio.fire || 0, rumble: (this.audio.rumble || 0) + this.events.shake * 0.5 + (this.volcano ? this.volcano.rumble : 0), underRoof: false,
     }, this.camera);
   }
 

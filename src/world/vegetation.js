@@ -205,7 +205,7 @@ export class Vegetation {
       parts = F.types[type];
       const meshes = [];
       if (parts.trunk) meshes.push(new THREE.InstancedMesh(parts.trunk, F.trunkMat, list.length));
-      if (parts.leaves) meshes.push(new THREE.InstancedMesh(parts.leaves, F.leafMat, list.length));
+      if (parts.leaves) { const lm = new THREE.InstancedMesh(parts.leaves, F.leafMat, list.length); lm.customDepthMaterial = F.leafDepthMat; meshes.push(lm); }
       list.forEach((p, i) => {
         _q.setFromEuler(_e.set(p.tilt, p.rot, -p.tilt * 0.6));
         _m.compose(_p.set(p.x, p.y, p.z), _q, _s.set(p.scale, p.scale, p.scale));
@@ -413,12 +413,13 @@ export class Vegetation {
   }
 
   // Push a circle (x,z,r) out of solid trunks and rocks. Returns adjusted {x,z}
-  collide(pos, r, yFeet = null) {
+  collide(pos, r, yFeet = null, treesOnly = false) {
     this.forEachNear(pos.x, pos.z, r + 6, (it) => {
       if (!it.alive || it.radius < 0.25) return;
-      if (it.kind === 'tree' || it.kind === 'rock' || it.kind === 'ore') {
+      const bush = (it.kind === 'plant' || it.kind === 'bush') && it.radius >= 0.3;
+      if (treesOnly ? it.kind === 'tree' : (it.kind === 'tree' || it.kind === 'rock' || it.kind === 'ore' || bush)) {
         if (yFeet !== null && it.kind !== 'tree' && yFeet > it.y + it.scale * 0.9) return;
-        const rr = (it.kind === 'tree' ? it.radius * 0.9 : it.radius) + r;
+        const rr = (it.kind === 'tree' ? it.radius * 0.9 : bush ? it.radius * 0.8 : it.radius) + r;
         const dx = pos.x - it.x, dz = pos.z - it.z;
         const d2 = dx * dx + dz * dz;
         if (d2 < rr * rr && d2 > 1e-6) {

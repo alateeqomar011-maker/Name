@@ -704,6 +704,13 @@ export class Dino {
         this.mgr.footfall(this);
       }
     }
+    // slide around tree trunks instead of walking through them
+    if (!this.flyer && !this.marine && this.alive && this.lod === 0 && this.speed > 0.05) {
+      const cp = this._cp || (this._cp = { x: 0, z: 0, hit: false });
+      cp.x = this.pos.x; cp.z = this.pos.z; cp.hit = false;
+      this.game.veg.collide(cp, this.radius * 0.6, this.pos.y, true);
+      if (cp.hit) { this.pos.x = cp.x; this.pos.z = cp.z; }
+    }
     if (!this.flyer && !this.marine) {
       const gh = w.getHeight(this.pos.x, this.pos.z);
       // swimmers float

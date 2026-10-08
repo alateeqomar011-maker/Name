@@ -328,7 +328,7 @@ export class Water {
         const seeds = new Float32Array(count);
         for (let i = 0; i < count; i++) { seeds[i] = Math.random(); }
         g.setAttribute('position', new THREE.BufferAttribute(p, 3));
-        const mat = new THREE.PointsMaterial({ map: mistTex, size: 7, transparent: true, opacity: 0.35, depthWrite: false, color: 0xe8f2f4, sizeAttenuation: true });
+        const mat = new THREE.PointsMaterial({ map: mistTex, size: 6, transparent: true, opacity: 0.2, depthWrite: false, color: 0xe8f2f4, sizeAttenuation: true });
         const pts = new THREE.Points(g, mat);
         pts.frustumCulled = false;
         pts.layers.set(LAYER_OVERLAY);

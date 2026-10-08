@@ -1,7 +1,8 @@
 // Procedural vegetation assets: painted leaf atlas, bark texture and plant/tree/rock geometries.
 import * as THREE from 'three';
 import { mulberry32, Simplex } from '../core/noise.js';
-import { addWind } from './shaderlib.js';
+import { addWind, foliageDepthMaterial, U } from './shaderlib.js';
+import { atmospherePatch } from './atmosphere.js';
 
 const TILE = 256;
 export const TILES = { BROAD: 0, JUNGLE: 1, CONIFER: 2, FERN: 3, PALM: 4, MOSS: 5, TUFT: 6, BERRY: 7, SPRAY: 8, BROAD2: 9, TWIG: 10, NEEDLE: 11 };
@@ -588,7 +589,7 @@ function kapok(seed) {
     leaves.card(vb.clone().add(V3(0, -4, 0)), V3(1.2, 0, 0), V3(0, 4, 0), TILES.MOSS, [0.75, 0.9, 0.7], 0.5, vb, [0.9, 0.3]);
   }
   leaves.cluster(V3(0, H + 3, 0), 5, 10, TILES.JUNGLE, [0.95, 1, 0.95], 0.4, rand);
-  return { trunk: trunk.build(), leaves: leaves.build(), radius: 1.3, height: H + 6 };
+  return { trunk: trunk.build(), leaves: leaves.build(), radius: 1.75, height: H + 6 };
 }
 
 function palm(seed) {
@@ -727,7 +728,7 @@ function shrub(seed, tile = TILES.BROAD) {
   leaves.cluster(V3(0, 0.8, 0), 1.2, 7, tile, [1, 1, 1], 0.3, rand);
   leaves.cluster(V3(0.6, 0.5, 0.3), 0.9, 4, tile, [0.92, 0.95, 0.9], 0.3, rand);
   leaves.cluster(V3(-0.5, 0.5, -0.4), 0.9, 4, tile, [0.92, 0.95, 0.9], 0.3, rand);
-  return { leaves: leaves.build(), radius: 0 };
+  return { leaves: leaves.build(), radius: 0.5 };
 }
 
 function horsetail(seed) {
@@ -783,6 +784,23 @@ export function rockGeometry(seed, detail = 3, squash = 0.7, ore = false) {
   return g;
 }
 
+// boulders gather snow on their upper faces in winter
+function snowyRock(m) {
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uWinter = U.uWinter;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float uWinter;')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          vec3 wN = inverseTransformDirection(normal, viewMatrix);
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.68, 0.71, 0.76), smoothstep(0.3, 0.75, wN.y) * uWinter * 0.95);
+        }`);
+    atmospherePatch(shader);
+  };
+  m.customProgramCacheKey = () => 'snowyRock';
+  return m;
+}
+
 // ---------- Library ----------
 export class FloraLibrary {
   constructor() {
@@ -791,10 +809,11 @@ export class FloraLibrary {
     this.bark = bark.tex;
     this.leafMat = addWind(new THREE.MeshStandardMaterial({
       map: this.atlas, vertexColors: true, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.82, metalness: 0,
-    }), 1.0, true);
+    }), 1.0, true, 'leaf');
     this.leafMat.alphaToCoverage = true;
-    this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, bumpMap: bark.bump, bumpScale: 2.5, vertexColors: true, roughness: 0.95 }), 0.6);
-    this.rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 });
+    this.leafDepthMat = foliageDepthMaterial(this.atlas, 1.0);
+    this.trunkMat = addWind(new THREE.MeshStandardMaterial({ map: this.bark, bumpMap: bark.bump, bumpScale: 2.5, vertexColors: true, roughness: 0.95 }), 0.6, false, 'bark');
+    this.rockMat = snowyRock(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92 }));
     this.oreMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.35 });
     this.types = {
       conifer: conifer(11), conifer2: conifer(12), oak: oak(21), oak2: oak(22), kapok: kapok(31), palm: palm(41), palm2: palm(42),
