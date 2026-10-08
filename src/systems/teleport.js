@@ -179,6 +179,8 @@ registerLocation({
     const w = g.world;
     const R = region('badlands');
     const ruins = g.pois.list.filter((p) => p.type === 'ruin').map((p) => ({ p, d: Math.hypot(p.x - R.x, p.z - R.z) })).filter((o) => o.d < R.r * 1.1).sort((a, b) => a.d - b.d);
+    const ov = this.overlook(g);
+    if (ov) return ov;
     if (ruins.length) {
       const ru = ruins[0].p;
       const s = search(g, { cx: ru.x, cz: ru.z, r: 48, rMin: 26, seed: 51, accept: (x, z, h, b, n) => n.y > 0.88, score: (x, z, h) => -flatness(w, x, z, h, 4) });
@@ -186,6 +188,17 @@ registerLocation({
     }
     const s = search(g, { cx: R.x, cz: R.z, r: 400, seed: 52, accept: (x, z, h, b, n) => b === BIOME.DESERT && n.y > 0.9 });
     return s && { x: s.x, z: s.z, yaw: 1.2, pitch: 0.02 };
+  },
+  // a mesa-top overlook across the canyons, used when no ruin gives a good frame
+  overlook(g) {
+    const w = g.world;
+    const R = region('badlands');
+    const s = search(g, { cx: R.x, cz: R.z, r: 520, seed: 53, tries: 4000, accept: (x, z, h, b, n) => (b === BIOME.DESERT || b === BIOME.CANYON) && n.y > 0.93 && flatness(w, x, z, h, 8) < 2.5,
+      score: (x, z, h) => { let m = 0; for (let k = 0; k < 8; k++) { const a = k * 0.785; m += w.getHeight(x + Math.cos(a) * 140, z + Math.sin(a) * 140); } return h - m / 8; } });
+    if (!s) return null;
+    let best = 0, by = 0;
+    for (let k = 0; k < 16; k++) { const a = (k / 16) * Math.PI * 2; const d = s.h - w.getHeight(s.x + Math.sin(a) * 200, s.z + Math.cos(a) * 200); if (d > by) { by = d; best = a; } }
+    return { x: s.x, z: s.z, yaw: best, pitch: -0.12 };
   },
 });
 
@@ -211,7 +224,8 @@ registerLocation({
   find(g) {
     const w = g.world;
     const R = region('mirefen');
-    const s = search(g, { cx: R.x, cz: R.z, r: 380, seed: 71, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.9 && !!waterYaw(w, x, z, 30) });
+    const s = search(g, { cx: R.x, cz: R.z, r: 380, seed: 71, tries: 4000, accept: (x, z, h, b, n) => b === BIOME.SWAMP && n.y > 0.9 && w.getVeg(x, z) < 0.35 && !!waterYaw(w, x, z, 30),
+      score: (x, z) => (waterYaw(w, x, z, 30) || { n: 0 }).n - w.getVeg(x, z) * 10 });
     if (!s) return null;
     const wy = waterYaw(w, s.x, s.z, 30);
     return { x: s.x, z: s.z, yaw: wy ? wy.yaw : 0, pitch: 0 };
@@ -232,14 +246,14 @@ registerLocation({
 });
 
 registerLocation({
-  id: 'summit', icon: '❄️', name: 'Mount Titan Summit', tag: 'Frozen Peak', danger: 3, hour: 12.5,
+  id: 'summit', icon: '❄️', name: 'Mount Titan Summit', tag: 'Frozen Peak', danger: 3, hour: 10.5,
   desc: 'The roof of the world: wind-scoured snow and ice above the clouds, with the whole continent laid out below.',
   at: { x: -180, z: -1380 },
   find(g) {
     const peak = g.pois.list.find((p) => p.id === 'peak-titan');
     if (!peak) return null;
     const s = search(g, { cx: peak.x, cz: peak.z, r: 60, seed: 91, accept: (x, z, h, b, n) => n.y > 0.75, score: (x, z, h) => h });
-    return s && { x: s.x, z: s.z, yaw: face(s.x, s.z, 0, 0), pitch: -0.12 };
+    return s && { x: s.x, z: s.z, yaw: face(s.x, s.z, VOLCANO.x, VOLCANO.z), pitch: -0.08 };
   },
 });
 
@@ -260,8 +274,12 @@ registerLocation({
   at: { x: ISLANDS[0].x, z: ISLANDS[0].z },
   find(g) {
     const I = ISLANDS[0];
-    const s = search(g, { cx: I.x, cz: I.z, r: I.r * 0.9, seed: 111, accept: (x, z, h, b, n) => h > 1 && h < 14 && n.y > 0.9 });
-    return s && { x: s.x, z: s.z, yaw: face(s.x, s.z, I.x, I.z), pitch: 0.08 };
+    const w = g.world;
+    const s = search(g, { cx: I.x, cz: I.z, r: I.r * 1.05, rMin: I.r * 0.55, seed: 111, tries: 4000, accept: (x, z, h, b, n) => h > 0.8 && h < 4 && n.y > 0.93 && !!waterYaw(w, x, z, 35) });
+    if (!s) return null;
+    // look along the shoreline so both the surf and the jungle peak are in frame
+    const toC = face(s.x, s.z, I.x, I.z);
+    return { x: s.x, z: s.z, yaw: toC + 0.9, pitch: 0.04 };
   },
 });
 

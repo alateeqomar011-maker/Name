@@ -67,7 +67,8 @@ void main(){
     // from a sun pinned just above the horizon (a cheap stand-in for multiple scattering)
     vec3 sdx = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.025), uSunDir.z));
     float twi = smoothstep(-0.2, 0.025, uSunDir.y);
-    vec3 phys = skyScatter(normalize(vec3(dir.x, max(y, 0.0) + 0.002, dir.z)), sdx) * uSkyI * twi * twi;
+    // never sample the grazing path right at the horizon: single scattering over-reddens it
+    vec3 phys = skyScatter(normalize(vec3(dir.x, max(y, 0.0) * 0.96 + 0.04, dir.z)), sdx) * uSkyI * twi * twi;
     col = mix(col, phys, uPhys);
   }
   if (y < 0.0) col = mix(col, uHorizon * 0.55, smoothstep(0.0, -0.25, y));
