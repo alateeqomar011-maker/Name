@@ -2,7 +2,7 @@
 // hidden treasures, lost explorers, fossil digs, nesting grounds and supply caches.
 import * as THREE from 'three';
 import { buildLandmark } from './props.js';
-import { Avatar } from '../player/avatar.js';
+import { Avatar, EXPLORER_LOOKS } from '../player/avatar.js';
 import { mulberry32, clamp } from '../core/noise.js';
 import { BIOME, REGIONS, ISLANDS, VOLCANO, HALF } from './worldgen.js';
 
@@ -211,8 +211,8 @@ export class POIs {
       p.colliders = colliders.map((k) => ({ x: p.x + k.x * c + k.z * s, z: p.z - k.x * s + k.z * c, r: k.r, top: p.y + k.top }));
       p.lightSrcs = (group.userData.lights || []).map((L) => this.game.fx.addLight({ pos: group.localToWorld(L.pos.clone()), color: L.color, intensity: L.intensity, dist: L.dist, flicker: L.flicker }));
       if (p.type === 'explorer') {
-        const av = new Avatar();
-        av.mats.shirt.color.setHex([0x3a6a8a, 0xa04a3a, 0x6a8a3a, 0x8a6a9a, 0xc08a3a, 0x4a4a4a][this.list.indexOf(p) % 6]);
+        // every lost explorer has their own face, hair, outfit and signature gear
+        const av = new Avatar({ ...(EXPLORER_LOOKS[p.id] || {}), npc: true });
         av.root.position.set(p.x + 1.5, p.y, p.z + 1.5);
         av.root.rotation.y = this.rand() * 6;
         this.group.add(av.root);
@@ -284,13 +284,24 @@ export class POIs {
         av.root.rotation.y = Math.atan2(dx, dz);
       }
       n.pos.y = Math.max(g.world.getHeight(n.pos.x, n.pos.z), g.world.waterLevelAt(n.pos.x, n.pos.z) - 1.4);
-      av.update(dt, { speed: sp, onGround: true, swim: g.world.waterLevelAt(n.pos.x, n.pos.z) - g.world.getHeight(n.pos.x, n.pos.z) > 1.3 });
+      av.update(dt, { speed: sp, onGround: true, swim: g.world.waterLevelAt(n.pos.x, n.pos.z) - g.world.getHeight(n.pos.x, n.pos.z) > 1.3, mood: 'happy' });
       // safe?
       const camp = this.camp;
       const safe = Math.hypot(camp.x - n.pos.x, camp.z - n.pos.z) < 30 || g.build.shelterNear(n.pos.x, n.pos.z, 25);
       if (safe) this.rescue(p);
     } else {
-      av.update(dt, { speed: 0, onGround: true, crouch: true, action: Math.hypot(P.x - n.pos.x, P.z - n.pos.z) < 30 });
+      // waiting to be found: worried, busy with their work; they stand and wave when you come close
+      const dP = Math.hypot(P.x - n.pos.x, P.z - n.pos.z);
+      const near = dP < 14;
+      let lookYaw = 0;
+      if (near) {
+        const want = Math.atan2(P.x - n.pos.x, P.z - n.pos.z);
+        let d = want - av.root.rotation.y;
+        d = Math.atan2(Math.sin(d), Math.cos(d));
+        av.root.rotation.y += d * Math.min(1, dt * 2.5);
+        lookYaw = Math.max(-0.6, Math.min(0.6, d));
+      }
+      av.update(dt, { speed: 0, onGround: true, crouch: !near, action: !near && dP < 30, wave: near && dP > 3, lookYaw, mood: near ? 'happy' : 'worried' });
     }
   }
 

@@ -456,7 +456,7 @@ export class Player {
     a.root.rotation.y = this.yaw;
     a.update(dt, {
       speed: this.speed, onGround: this.onGround, crouch: this.crouch, swim: this.swimming, climb: this.climbing,
-      glide: this.gliding, action: this.action > 0, camera: this.photoMode,
+      glide: this.gliding, action: this.action > 0, camera: this.photoMode, hurt: this.lastDamage < 0.9 && this.alive,
     });
     this.action = Math.max(0, this.action - dt);
   }

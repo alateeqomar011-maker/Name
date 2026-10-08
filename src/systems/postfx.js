@@ -398,7 +398,9 @@ export class CinematicPass extends Pass {
   }
   // focusDist: metres to the subject; aperture: 0 = everything sharp
   setup(focusDist, aperture, farBlur, motionBlur, dt) {
-    this.focus += (focusDist - this.focus) * (1 - Math.exp(-dt * 6));
+    // ease focus pulls, but snap after big jumps (camera mode switch, teleport, slow frames)
+    if (Math.abs(focusDist - this.focus) > Math.max(1.5, focusDist * 0.5)) this.focus = focusDist;
+    else this.focus += (focusDist - this.focus) * (1 - Math.exp(-dt * 10));
     const u = this.uniforms;
     u.uFocus.value = Math.max(0.5, this.focus);
     u.uAperture.value = aperture;
