@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avatar lab</title>
+    <style>
+      body { margin: 0; background: #07080c; color: #fff; font: 13px system-ui; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; padding: 10px; }
+      .cell { background: #111; border-radius: 12px; overflow: hidden; }
+      .cell canvas { width: 100%; aspect-ratio: 3 / 4; display: block; }
+      .cell div { padding: 6px 8px; opacity: 0.7; }
+      .big { width: 960px; height: 540px; display: block; margin: 10px; border-radius: 16px; }
+    </style>
+  </head>
+  <body>
+    <canvas class="big" id="big"></canvas>
+    <div class="grid" id="grid"></div>
+    <script type="module" src="./avatar-lab.ts"></script>
+  </body>
+</html>
