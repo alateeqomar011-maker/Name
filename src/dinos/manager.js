@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { SPECIES, SPECIES_LIST } from './species.js';
 import { buildTemplate, makeSkinMaterial } from './model.js';
+import { packTemplate, unpackTemplate, specKey, cacheGet, cachePut } from './templateIO.js';
 import { Dino } from './dino.js';
 import { mulberry32, clamp } from '../core/noise.js';
 import { BIOME, HALF } from '../world/worldgen.js';
@@ -54,15 +55,54 @@ export class DinoManager {
     this._fpInit();
   }
 
-  // Build every species template (call during loading)
+  // Build every species template (call during loading): cached bodies come straight from
+  // IndexedDB, the rest are sculpted in parallel workers (main thread if workers are unavailable)
   async buildTemplates(onProgress) {
-    let i = 0;
+    const keys = Object.fromEntries(SPECIES_LIST.map((s) => [s.id, specKey(s)]));
+    const cached = await cacheGet(Object.values(keys));
+    let done = 0;
+    const tick = () => { done++; onProgress && onProgress(done / SPECIES_LIST.length); };
+    const todo = [];
     for (const spec of SPECIES_LIST) {
-      this.templates[spec.id] = buildTemplate(spec);
-      i++;
-      onProgress && onProgress(i / SPECIES_LIST.length);
-      await new Promise((r) => setTimeout(r, 0));
+      const c = cached[keys[spec.id]];
+      if (c) { this.templates[spec.id] = unpackTemplate(c, spec); tick(); } else todo.push(spec);
     }
+    if (!todo.length) return;
+    const fresh = [];
+    // the heaviest bodies first so the pool finishes together
+    todo.sort((a, b) => (b.flyer || b.aquatic ? 0 : b.length) - (a.flyer || a.aquatic ? 0 : a.length));
+    try {
+      const n = Math.max(1, Math.min(todo.length, (navigator.hardwareConcurrency || 4) - 1, 8));
+      const pool = Array.from({ length: n }, () => new Worker(new URL('./templateWorker.js', import.meta.url), { type: 'module' }));
+      await new Promise((resolve, reject) => {
+        let next = 0, finished = 0;
+        const feed = (w) => { if (next < todo.length) w.postMessage({ id: todo[next++].id }); };
+        for (const w of pool) {
+          w.onmessage = (e) => {
+            if (e.data.error) { reject(new Error(e.data.error)); return; }
+            const spec = SPECIES[e.data.id];
+            this.templates[spec.id] = unpackTemplate(e.data.p, spec);
+            fresh.push([keys[spec.id], e.data.p]);
+            tick();
+            if (++finished === todo.length) resolve(); else feed(w);
+          };
+          w.onerror = (err) => reject(err);
+          feed(w);
+        }
+      });
+      pool.forEach((w) => w.terminate());
+    } catch (e) {
+      console.warn('template workers failed, sculpting on the main thread', e);
+      for (const spec of todo) {
+        if (this.templates[spec.id]) continue;
+        const t = buildTemplate(spec);
+        this.templates[spec.id] = t;
+        fresh.push([keys[spec.id], packTemplate(t)]);
+        tick();
+        await new Promise((r) => setTimeout(r, 0));
+      }
+    }
+    cachePut(fresh);
   }
 
   template(id) {

@@ -1,6 +1,7 @@
 // Procedural, skinned dinosaur models. Each species is generated from anatomical parameters:
 // a swept body along a spine curve, jointed legs/arms, and species features (horns, frills, sails, plates...).
 import * as THREE from 'three';
+import { Sculpt } from './sculpt.js';
 import { TerrainTextures } from '../world/materials.js';
 import { atmospherePatch, TRANSLUCENCY } from '../world/atmosphere.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -45,6 +46,17 @@ function finishPart(geo, color, mat, skinFn) {
   geo.setAttribute('aMat', new THREE.BufferAttribute(am, 1));
   geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+  return geo;
+}
+
+// sculpted skin from Sculpt.mesh(): skin weights already blended per vertex
+function finishSkinned(res) {
+  const geo = res.geometry;
+  const n = geo.attributes.position.count;
+  geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+  geo.setAttribute('aMat', new THREE.BufferAttribute(new Float32Array(n), 1));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(res.skinIndex, 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(res.skinWeight, 4));
   return geo;
 }
 
@@ -332,73 +344,108 @@ function buildWalker(spec) {
     o.i[0] = chain[i][0]; o.w[0] = 1 - t; o.i[1] = chain[i + 1][0]; o.w[1] = t; o.i[2] = o.i[3] = 0; o.w[2] = o.w[3] = 0;
   };
 
-  // ----- Body sweep -----
+  // ----- Body: one sculpted skin -----
+  // The trunk, neck, tail and skull are a swept volume (the same profile as the rings below), and
+  // every limb, muscle and skull detail is blended into it as a distance field
+  const S = new Sculpt();
   const parts = [];
   const RINGS = Math.max(70, Math.round(total / (spec.length / 90)));
-  const RAD = 24;
-  const pos = [], idx = [], ringArc = [], ringInfo = [];
-  // anatomical regions along the arc, for muscle definition in the cross-section
+  const ringInfo = [];
   const chestArcA = arcs[chestKey], headArcA = arcs[headKeyStart];
   const smoothK = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  // cross-section modifiers at arc a and angle ang (0 = dorsal, +pi/2 = right flank)
+  const crossMod = (a, ang, s, out) => {
+    const c = Math.cos(ang);
+    const vr = c >= 0 ? s.rt : s.rb;
+    const sq = 1 + 0.08 * Math.pow(Math.sin(2 * ang), 2);
+    const aa = Math.abs(ang), dTop = aa, dBot = Math.PI - aa;
+    const dorsal = Math.exp(-dTop * dTop * 14), ventral = Math.exp(-dBot * dBot * 10);
+    let xs = 1, upAdd = 0;
+    if (a >= hipArc && a <= chestArcA) {
+      // barrel ribcage at mid-flank, spine ridge, shoulder and hip muscle masses
+      const tT = (a - hipArc) / Math.max(1e-4, chestArcA - hipArc);
+      const rib = Math.sin(Math.PI * tT);
+      xs *= 1 + 0.07 * rib * smoothK(-0.45, 0.35, c) * (1 - Math.max(0, c) * 0.6);
+      const mus = Math.exp(-(((tT - 0.93) / 0.13) ** 2)) + Math.exp(-(((tT - 0.05) / 0.13) ** 2));
+      xs *= 1 + 0.06 * mus * Math.max(0, c + 0.25);
+      upAdd += vr * 0.05 * dorsal;
+    } else if (a < hipArc) {
+      // tail: big caudofemoralis muscles low on the sides at the base, ridge above, chevron keel below
+      const u = a / Math.max(1e-4, hipArc);
+      const base = smoothK(0.45, 1.0, u);
+      xs *= 1 + 0.15 * base * Math.max(0, -c * 1.2 + 0.2);
+      upAdd += vr * (0.07 * dorsal - 0.05 * ventral) * (0.3 + 0.7 * u);
+    } else if (a < headArcA) {
+      // neck: muscular throat and a low dorsal ridge
+      const tN = (a - chestArcA) / Math.max(1e-4, headArcA - chestArcA);
+      xs *= 1 + 0.06 * Math.max(0, -c) * (1 - tN);
+      upAdd += vr * 0.035 * dorsal;
+    }
+    out.xs = xs; out.upAdd = upAdd; out.sq = sq; out.vr = vr;
+    return out;
+  };
   for (let m = 0; m <= RINGS; m++) {
     const a = (m / RINGS) * total;
-    const s = sampleAt(a);
-    const dA = Math.max(0.01, spec.length * 0.025);
-    const s2 = sampleAt(Math.min(total, a + dA)), s1 = sampleAt(Math.max(0, a - dA));
-    let tz = s2.z - s1.z, ty = s2.y - s1.y;
-    const tl = Math.hypot(tz, ty) || 1; tz /= tl; ty /= tl;
-    const upY = tz, upZ = -ty;
-    ringInfo.push({ z: s.z, y: s.y, rt: s.rt, rb: s.rb, rw: s.rw, a });
-    for (let j = 0; j < RAD; j++) {
-      const ang = (j / RAD) * Math.PI * 2;
-      const c = Math.cos(ang), sn = Math.sin(ang);
-      const vr = c >= 0 ? s.rt : s.rb;
-      // slightly squarer cross-section for bulk
-      const sq = 1 + 0.08 * Math.pow(Math.sin(2 * ang), 2);
-      const dTop = Math.min(ang, Math.PI * 2 - ang), dBot = Math.abs(ang - Math.PI);
-      const dorsal = Math.exp(-dTop * dTop * 14), ventral = Math.exp(-dBot * dBot * 10);
-      let xs = 1, upAdd = 0;
-      if (a >= hipArc && a <= chestArcA) {
-        // barrel ribcage at mid-flank, spine ridge, shoulder and hip muscle masses
-        const tT = (a - hipArc) / Math.max(1e-4, chestArcA - hipArc);
-        const rib = Math.sin(Math.PI * tT);
-        xs *= 1 + 0.07 * rib * smoothK(-0.45, 0.35, c) * (1 - Math.max(0, c) * 0.6);
-        const mus = Math.exp(-(((tT - 0.93) / 0.13) ** 2)) + Math.exp(-(((tT - 0.05) / 0.13) ** 2));
-        xs *= 1 + 0.06 * mus * Math.max(0, c + 0.25);
-        upAdd += vr * 0.05 * dorsal;
-      } else if (a < hipArc) {
-        // tail: big caudofemoralis muscles low on the sides at the base, ridge above, chevron keel below
-        const u = a / Math.max(1e-4, hipArc);
-        const base = smoothK(0.45, 1.0, u);
-        xs *= 1 + 0.15 * base * Math.max(0, -c * 1.2 + 0.2);
-        upAdd += vr * (0.07 * dorsal - 0.05 * ventral) * (0.3 + 0.7 * u);
-      } else if (a < headArcA) {
-        // neck: muscular throat and a low dorsal ridge
-        const tN = (a - chestArcA) / Math.max(1e-4, headArcA - chestArcA);
-        xs *= 1 + 0.06 * Math.max(0, -c) * (1 - tN);
-        upAdd += vr * 0.035 * dorsal;
-      }
-      const x = sn * s.rw * sq * xs;
-      const up = c * vr * sq + upAdd;
-      pos.push(x, s.y + upY * up, s.z + upZ * up);
-      ringArc.push(a);
+    const sm2 = sampleAt(a);
+    ringInfo.push({ z: sm2.z, y: sm2.y, rt: sm2.rt, rb: sm2.rb, rw: sm2.rw, a });
+  }
+  {
+    // nearest spine sample by lookup grid over the (z, y) plane, refined locally
+    const TZ = table.z, TY = table.y;
+    let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity, rMax = 0;
+    for (let m = 0; m <= TN; m++) {
+      z0 = Math.min(z0, TZ[m]); z1 = Math.max(z1, TZ[m]); y0 = Math.min(y0, TY[m]); y1 = Math.max(y1, TY[m]);
+      rMax = Math.max(rMax, table.rw[m], table.rt[m], table.rb[m]);
     }
+    const pad = rMax * 1.6 + spec.length * 0.05;
+    z0 -= pad; z1 += pad; y0 -= pad; y1 += pad;
+    const g = spec.length / 80;
+    const LZ = Math.ceil((z1 - z0) / g) + 1, LY = Math.ceil((y1 - y0) / g) + 1;
+    const look = new Int16Array(LZ * LY);
+    for (let j = 0; j < LY; j++) for (let i = 0; i < LZ; i++) {
+      const zc = z0 + i * g, yc = y0 + j * g;
+      let best = 0, bd = Infinity;
+      for (let m = 0; m <= TN; m++) { const d = (TZ[m] - zc) ** 2 + (TY[m] - yc) ** 2; if (d < bd) { bd = d; best = m; } }
+      look[j * LZ + i] = best;
+    }
+    const cm = { xs: 1, upAdd: 0, sq: 1, vr: 1 };
+    const res = { a: 0 };
+    const sweepD = (x, y, z, out) => {
+      const ci = Math.max(0, Math.min(LZ - 1, Math.round((z - z0) / g))), cj = Math.max(0, Math.min(LY - 1, Math.round((y - y0) / g)));
+      const m0 = look[cj * LZ + ci];
+      let mb = m0, bd = Infinity;
+      for (let m = Math.max(0, m0 - 6), me = Math.min(TN, m0 + 6); m <= me; m++) { const qz = TZ[m] - z, qy = TY[m] - y, d = qz * qz + qy * qy; if (d < bd) { bd = d; mb = m; } }
+      // project onto the neighbouring segments for a continuous arc parameter
+      let mf = mb;
+      for (const m of [mb - 1, mb]) {
+        if (m < 0 || m >= TN) continue;
+        const ez = TZ[m + 1] - TZ[m], ey = TY[m + 1] - TY[m];
+        const t = ((z - TZ[m]) * ez + (y - TY[m]) * ey) / (ez * ez + ey * ey || 1);
+        if (t >= 0 && t <= 1) { mf = m + t; if (m === mb) break; }
+      }
+      const a = (mf / TN) * total;
+      const sp = sampleAt(a);
+      const mA = Math.max(0, Math.floor(mf) - 2), mB = Math.min(TN, Math.floor(mf) + 3);
+      let tz = TZ[mB] - TZ[mA], ty = TY[mB] - TY[mA];
+      const tl = Math.sqrt(tz * tz + ty * ty) || 1; tz /= tl; ty /= tl;
+      const dz = z - sp.z, dy = y - sp.y;
+      const along = dz * tz + dy * ty;
+      const up = dy * tz - dz * ty;
+      const vr0 = up >= 0 ? sp.rt : sp.rb;
+      const ang = Math.atan2(x / sp.rw, up / vr0);
+      crossMod(a, ang, sp, cm);
+      const Sx = Math.sin(ang) * sp.rw * cm.sq * cm.xs, Su = Math.cos(ang) * cm.vr * cm.sq + cm.upAdd;
+      let d = (Math.sqrt(x * x + up * up) - Math.sqrt(Sx * Sx + Su * Su)) * 0.9;
+      // rounded caps at the tail tip and the snout
+      if ((mf <= 0.001 && along < 0) || (mf >= TN - 0.001 && along > 0)) { const dp = Math.max(d, 0); d = Math.sqrt(dp * dp + along * along) + Math.min(d, 0); }
+      if (out) out.a = a;
+      return d;
+    };
+    S.add({
+      d: (x, y, z) => sweepD(x, y, z, null), k: 0, skin: (x, y, z, o) => { sweepD(x, y, z, res); spineSkin(res.a, o); },
+      box: [-rMax * 1.4, y0 + pad - rMax * 1.4, z0 + pad - rMax * 1.4, rMax * 1.4, y1 - pad + rMax * 1.4, z1 - pad + rMax * 1.4],
+    });
   }
-  for (let m = 0; m < RINGS; m++) for (let j = 0; j < RAD; j++) {
-    const a = m * RAD + j, b = m * RAD + ((j + 1) % RAD), c = a + RAD, d = b + RAD;
-    idx.push(a, b, c, b, d, c);
-  }
-  const cs = pos.length / 3; pos.push(0, ringInfo[0].y, ringInfo[0].z - 0.01); ringArc.push(0);
-  const ce = pos.length / 3; pos.push(0, ringInfo[RINGS].y, ringInfo[RINGS].z + 0.01); ringArc.push(total);
-  for (let j = 0; j < RAD; j++) {
-    idx.push(cs, (j + 1) % RAD, j);
-    idx.push(ce, RINGS * RAD + j, RINGS * RAD + ((j + 1) % RAD));
-  }
-  const bodyGeo = new THREE.BufferGeometry();
-  bodyGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  bodyGeo.setIndex(idx);
-  bodyGeo.computeVertexNormals();
-  parts.push(finishPart(bodyGeo, [1, 1, 1], 0, (x, y, z, o, i) => spineSkin(ringArc[i], o)));
 
   const ringAtZ = (z) => {
     let best = ringInfo[0], bd = Infinity;
@@ -448,6 +495,27 @@ function buildWalker(spec) {
     }
   }
 
+  // ----- Skull sculpting: eye sockets, brow ridges, cheeks, jaw muscles, nasal ridge, nostrils -----
+  {
+    const hr = headR(0.2);
+    const er = Math.max(0.015, P.headR * 0.13);
+    const carn = spec.diet === 'carnivore' || spec.diet === 'piscivore';
+    const hk = P.headR;
+    const hs = rigid(head);
+    const SX = v3(1, 0, 0);
+    for (const side of [-1, 1]) {
+      const ec = headPt(P.headLen * 0.2, hr.rt * 0.42, side * hr.rw * 0.86);
+      S.sphere(ec, er * 1.08, er * 0.55, null, true);
+      S.ellipsoid(ec.clone().addScaledVector(hUp, er * 0.95).addScaledVector(hd, -er * 0.15).add(v3(-side * er * 0.15, 0, 0)), er * 0.75, er * (carn ? 0.55 : 0.42), er * 1.7, er * 0.7, hs, SX, hUp);
+      S.ellipsoid(ec.clone().addScaledVector(hUp, -er * 1.15).addScaledVector(hd, er * 0.3), er * 0.7, er * 0.6, er * 1.9, er * 0.9, hs, SX, hUp);
+      if (carn) S.ellipsoid(headPt(-P.headLen * 0.02, hr.rt * 0.05, side * hr.rw * 0.62), hk * 0.42, hk * 0.55, P.headLen * 0.2, hk * 0.3, hs, SX, hUp);
+      const ns = headR(0.92);
+      S.sphere(headPt(P.headLen * 0.92, ns.rt * 0.45, side * ns.rw * 0.55), Math.max(0.005, P.snoutR * 0.14), P.snoutR * 0.1, null, true);
+    }
+    const nr = headR(0.6);
+    S.ellipsoid(headPt(P.headLen * 0.62, nr.rt * 0.78, 0), P.snoutR * 0.32, P.snoutR * 0.22, P.headLen * 0.28, P.snoutR * 0.5, hs, SX, hUp);
+  }
+
   // ----- Legs -----
   const legs = [];
   const buildLeg = (side, j0, lens, angles, thick, footLen, parentBone, prefix, claws) => {
@@ -480,19 +548,11 @@ function buildWalker(spec) {
       { p: T, r: thick * R[5] },
       { p: F, r: thick * R[6] },
     ];
-    const g = tube(pts, 12, 3);
-    const ts = g.userData.ts;
-    const bmap = [b0, b0, b1, b1, b2, b3, b3];
-    parts.push(finishPart(g, [1, 1, 1], 0, (x, y, z, o, i) => {
-      const t = ts[i];
-      const s0 = Math.min(5, Math.floor(t)), f = t - s0;
-      const segB = [b0, b0, b1, b1, b2, b3];
-      const ba = segB[s0], bb = bmap[s0 + 1];
-      // blend near joints
-      const w = f > 0.7 ? (f - 0.7) / 0.3 * 0.5 : 0;
-      o.i[0] = ba; o.w[0] = 1 - w; o.i[1] = bb; o.w[1] = w; o.i[2] = o.i[3] = 0; o.w[2] = o.w[3] = 0;
-    }));
-    // muscle mass at the top of the limb
+    // limb segments as rounded cones blended at the joints (knee, ankle) so the leg reads as one
+    // continuous fleshy limb; each segment follows its own bone
+    const segB = [b0, b0, b1, b1, b2, b3];
+    const kJ = thick * 0.22;
+    for (let q = 0; q < pts.length - 1; q++) S.roundCone(pts[q].p, pts[q + 1].p, pts[q].r, pts[q + 1].r, kJ, rigid(segB[q]));
     // big drumstick thigh / shoulder muscle that blends into the flank (sized by the upper limb, not just its radius)
     const L1 = K.distanceTo(j0);
     const quad = !P.biped;
@@ -500,20 +560,38 @@ function buildWalker(spec) {
     const mrx = Math.max(thick * 0.72, L1 * (quad ? 0.3 : 0.26)) * mz;
     const mry = Math.max(thick * 1.5, L1 * 0.52) * mz;
     const mrz = Math.max(thick * 1.15, L1 * (quad ? 0.4 : 0.36)) * mz;
-    parts.push(finishPart(ellipsoid(j0.clone().add(v3(-Math.sign(j0.x) * mrx * 0.15, -mry * 0.42, (K.z - j0.z) * 0.3)), mrx, mry, mrz, 14, 10), [1, 1, 1], 0, (x, y, z, o) => {
+    // bipeds carry a huge drumstick thigh that bulges out below the flank; quadrupeds a broad haunch
+    const thighC = j0.clone().add(v3(Math.sign(j0.x) * mrx * (quad ? 0.05 : 0.28), -mry * (quad ? 0.42 : 0.5), (K.z - j0.z) * 0.3));
+    S.ellipsoid(thighC, mrx, mry, mrz, thick * 0.55, (x, y, z, o) => {
       const t = Math.min(1, Math.max(0, (j0.y + thick * 0.4 - y) / (mry * 2)));
       o.i[0] = parentBone; o.w[0] = 1 - t; o.i[1] = b0; o.w[1] = t; o.i[2] = o.i[3] = 0; o.w[2] = o.w[3] = 0;
-    }));
+    });
+    // knee/elbow and the calf (gastrocnemius) bulging behind the top of the shin
+    {
+      const shin = A.clone().sub(K), sl = shin.length();
+      shin.normalize();
+      const bend = K.clone().sub(j0).normalize().add(K.clone().sub(A).normalize()).normalize();
+      const calfC = K.clone().addScaledVector(shin, sl * 0.28).addScaledVector(bend, -thick * (col ? 0.12 : 0.3));
+      S.ellipsoid(calfC, thick * (col ? 0.62 : 0.5), sl * 0.3, thick * (col ? 0.6 : 0.42), thick * 0.3, rigid(b1), v3(1, 0, 0), shin);
+      S.sphere(K.clone().addScaledVector(bend, thick * 0.12), thick * R[2] * 1.02, thick * 0.25, rigid(b1));
+    }
     if (col) {
-      // broad padded foot with short blunt nails around its front edge
-      const pad = T.clone().lerp(F, 0.5); pad.y = thick * 0.3;
-      parts.push(finishPart(ellipsoid(pad, thick * 0.78, thick * 0.36, thick * 0.86, 12, 7), [1, 1, 1], 0, rigid(b3)));
+      // columnar foot with a flat, slightly flared sole (graviportal, like an elephant's)
+      const pad = T.clone().lerp(F, 0.4); pad.y = thick * 0.24;
+      S.ellipsoid(pad, thick * 0.66, thick * 0.26, thick * 0.7, thick * 0.18, rigid(b3));
       if (claws) {
         for (let k = -2; k <= 2; k++) {
           const a = k * 0.34;
           const base = pad.clone().add(v3(Math.sin(a) * thick * 0.66, -thick * 0.12, Math.cos(a) * thick * 0.72));
           parts.push(finishPart(coneAlong(base, v3(Math.sin(a) * 0.5, -0.35, Math.cos(a)), thick * 0.26, thick * 0.17, 6, v3(0, -thick * 0.08, 0)), CLAW, 1, rigid(b3)));
         }
+      }
+    } else if (claws) {
+      // three fleshy, padded toes fanning forward from the ankle (bird-like)
+      for (const cx of [-1, 0, 1]) {
+        const base = T.clone().lerp(F, 0.12).add(v3(cx * thick * 0.1, 0, 0));
+        const tip = F.clone().add(v3(cx * thick * 0.3, 0, -thick * 0.08 + (cx === 0 ? thick * 0.1 : 0)));
+        S.roundCone(base, tip, thick * 0.2, thick * 0.1, thick * 0.1, rigid(b3));
       }
     }
     // toes/claws
@@ -562,9 +640,12 @@ function buildWalker(spec) {
       const Wr = E.clone().add(v3(0, -al * 0.1, al * 0.36));
       const Hn = Wr.clone().add(v3(0, -al * 0.08, al * 0.16));
       const b0 = addBone('armU' + s, chest, sh), b1 = addBone('armL' + s, b0, E), b2 = addBone('armA' + s, b1, Wr);
-      const g = tube([{ p: sh, r: P.armThick * 1.3 }, { p: E, r: P.armThick }, { p: Wr, r: P.armThick * 0.7 }, { p: Hn, r: P.armThick * 0.4 }], 7, 2);
-      const ts = g.userData.ts;
-      parts.push(finishPart(g, [1, 1, 1], 0, (x, y, z, o, i) => { const t = ts[i]; const b = t < 1 ? b0 : t < 2 ? b1 : b2; rigid(b)(x, y, z, o); }));
+      const ka = P.armThick * 0.35;
+      S.roundCone(sh, E, P.armThick * 1.35, P.armThick, ka, rigid(b0));
+      S.roundCone(E, Wr, P.armThick, P.armThick * 0.7, ka, rigid(b1));
+      S.roundCone(Wr, Hn, P.armThick * 0.7, P.armThick * 0.42, ka * 0.6, rigid(b2));
+      // biceps/triceps mass on the upper arm
+      S.ellipsoid(sh.clone().lerp(E, 0.45), P.armThick * 1.05, sh.distanceTo(E) * 0.36, P.armThick * 1.2, ka, rigid(b0), v3(1, 0, 0), E.clone().sub(sh));
       const clawN = P.scythe ? 3 : 2;
       for (let c = 0; c < clawN; c++) {
         const cl = P.scythe ? al * 0.45 : P.armThick * 2.2;
@@ -801,6 +882,13 @@ function buildWalker(spec) {
       }
     }
   }
+
+  // pelvis and shoulder blades showing under the hide
+  for (const side of [-1, 1]) {
+    S.ellipsoid(v3(side * P.hipR * W * 0.42, hipY + P.hipR * 0.62, 0.05 * P.hip), P.hipR * 0.26, P.hipR * 0.24, P.hipR * 0.62, P.hipR * 0.3, rigid(root));
+    if (!P.biped) S.ellipsoid(v3(side * P.chestR * W * 0.55, chestY + P.chestR * 0.35, P.bodyLen * 0.88), P.chestR * 0.28, P.chestR * 0.45, P.chestR * 0.5, P.chestR * 0.35, rigid(chest));
+  }
+  parts.unshift(finishSkinned(S.mesh(Math.max(0.004, spec.length / 150))));
 
   let geometry = mergeGeometries(parts, false);
   geometry.computeBoundingSphere();
@@ -1082,7 +1170,7 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
             // irregular tiger-like bands that wrap down the flanks and ring the tail
             float w = sin(vBind.z * s * 4.2 + fbm3(q * 1.3) * 4.5 + vBind.y * s * 0.7);
             float breakup = smoothstep(0.25, 0.55, fbm3(q * 2.6 + 7.0));
-            pat = smoothstep(0.3, 0.72, w) * mix(0.55, 1.0, breakup) * smoothstep(-0.6, 0.15, vBindN.y);
+            pat = smoothstep(0.2, 0.85, w) * mix(0.3, 1.0, breakup) * smoothstep(-0.6, 0.15, vBindN.y);
             // pale cream speckles on the back and flanks
             float spk = smoothstep(0.78, 0.86, vnoise(vec2(vBind.z, vBind.y + vBind.x) * s * 16.0)) * aa1;
             col = mix(col, uBelly * 1.1, spk * 0.35 * top);
@@ -1099,7 +1187,9 @@ export function makeSkinMaterial(colors, morph = null, size = 10, predator = fal
           } else {
             col = mix(uBelly, uBase, smoothstep(-0.12, 0.05, vBindN.y));
           }
-          col = mix(col, uPattern, pat * (uPatType == 0 ? 0.92 : 0.85));
+          // markings are muted and broken by the scales, like a monitor lizard's, not stencilled
+          float patBreak = 0.75 + 0.25 * vnoise(vec2(vBind.z, vBind.y + vBind.x) * uPatScale * 11.0);
+          col = mix(col, uPattern, pat * (uPatType == 0 ? 0.62 : 0.55) * patBreak);
           col *= 0.86 + 0.24 * scaleN;
           if (uSkinOK > 0.5) {
             // crevices between scales, slightly varied scale tones, worn pale tubercle tips
