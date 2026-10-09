@@ -386,6 +386,17 @@ export function setEnabled(id: string, enabled: boolean): Character | undefined 
   return upsertCharacter({ ...e.character, enabled } as unknown as CharacterInput);
 }
 
+/** Drops an admin override: seed characters revert to their seed definition, admin-only ones disappear. */
+export function deleteCharacter(id: string): 'reverted' | 'deleted' | undefined {
+  if (!entries.has(id)) return undefined;
+  run('DELETE FROM characters WHERE id = ?', id);
+  const seed = seedCharacters().find((c) => c.id === id && !isOptedOut(c.name, c.id));
+  if (seed) entries.set(id, index(seed));
+  else entries.delete(id);
+  trendingCache = null;
+  return seed ? 'reverted' : 'deleted';
+}
+
 export function importCharacters(list: CharacterInput[]): { ok: string[]; errors: { index: number; error: string }[] } {
   const ok: string[] = [];
   const errors: { index: number; error: string }[] = [];

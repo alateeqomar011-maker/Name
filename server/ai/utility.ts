@@ -87,7 +87,32 @@ export async function greetingScript(c: Character, input: GreetingInput): Promis
   const name = input.recipient.trim() || 'friend';
   const script =
     input.lang === 'ar'
-      ? `أهلاً ${name}! معك نسختك الذكية من ${c.nameAr ?? c.name}. حبيت أرسل لك ${occasionLabel(input.occasion) === 'a birthday' ? 'تهنئة بعيد ميلادك' : 'رسالة خاصة'} وأقول لك: استمر، اشتغل بجد، وخلّك دايماً فخور بنفسك. يومك سعيد!`
-      : `Hey ${name}! It's your AI ${first}, sending you ${occasionLabel(input.occasion)}, just for you. Keep working hard, keep smiling, and never stop believing in yourself. Have an amazing day!`;
+      ? `أهلاً ${name}! معك نسختك الذكية من ${c.nameAr ?? c.name}. حبيت أرسل لك ${OFFLINE_AR[input.occasion] ?? 'رسالة خاصة'} وأقول لك: استمر، اشتغل بجد، وخلّك دايماً فخور بنفسك. يومك سعيد!`
+      : `Hey ${name}! It's your AI ${first}, sending you ${OFFLINE_EN[input.occasion] ?? 'a special hello'}, just for you. Keep working hard, keep smiling, and never stop believing in yourself. Have an amazing day!`;
   return { script, ai: false };
 }
+
+/** Phrases for the template used when no LLM is configured ("sending you …"). */
+const OFFLINE_EN: Record<string, string> = {
+  birthday: 'the happiest of birthday wishes',
+  congrats: 'a huge congratulations',
+  motivation: 'some motivation for the big challenge ahead',
+  graduation: 'congratulations on your graduation',
+  eid: 'warm Eid Mubarak wishes',
+  ramadan: 'Ramadan Kareem wishes',
+  newyear: 'the best New Year wishes',
+  getwell: 'get-well-soon wishes',
+  thanks: 'a big thank-you',
+};
+
+const OFFLINE_AR: Record<string, string> = {
+  birthday: 'تهنئة بعيد ميلادك',
+  congrats: 'تهنئة كبيرة بإنجازك',
+  motivation: 'دفعة حماس قبل التحدي الكبير',
+  graduation: 'تهنئة بتخرجك',
+  eid: 'تهنئة بالعيد، عيدك مبارك',
+  ramadan: 'تهنئة برمضان، رمضان كريم',
+  newyear: 'أطيب التمنيات بالسنة الجديدة',
+  getwell: 'تمنياتي لك بالشفاء العاجل',
+  thanks: 'شكر كبير من القلب',
+};

@@ -6,6 +6,7 @@ import { requireAdmin, userById } from '../auth.ts';
 import {
   allCharacters,
   characterStats,
+  deleteCharacter,
   getCharacter,
   importCharacters,
   optOut,
@@ -79,6 +80,12 @@ adminRouter.post('/characters/:id/enabled', (req: Request, res: Response) => {
   const c = setEnabled(String(req.params.id), Boolean(req.body?.enabled));
   if (!c) return void res.status(404).json({ error: 'not_found' });
   res.json({ character: c });
+});
+
+adminRouter.delete('/characters/:id', (req: Request, res: Response) => {
+  const outcome = deleteCharacter(String(req.params.id));
+  if (!outcome) return void res.status(404).json({ error: 'not_found' });
+  res.json({ ok: true, outcome });
 });
 
 adminRouter.post('/import', (req: Request, res: Response) => {

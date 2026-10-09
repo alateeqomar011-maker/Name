@@ -32,6 +32,7 @@ export default function Requests() {
       setForm({ name: '', category: '', country: '', reason: '', links: '' });
     } catch (err) {
       if (err instanceof ApiError && err.code === 'exists') setExists({ id: String(err.data.characterId), name: form.name });
+      else if (err instanceof ApiError && err.code === 'opted_out') toast(t('requests.opted_out'), true);
       else toast(err instanceof ApiError ? err.message : t('common.error'), true);
     } finally {
       setBusy(false);

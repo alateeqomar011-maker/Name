@@ -6,6 +6,7 @@ import type { CelebrityRequest } from '../../shared/types.ts';
 import { normalize } from '../../shared/text.ts';
 import { attachUser, ensureUser } from '../auth.ts';
 import { getCharacter, search } from '../catalog/catalog.ts';
+import { isOptedOut } from '../catalog/optout.ts';
 import { all, get, now, run } from '../db.ts';
 
 export const communityRouter = Router();
@@ -51,6 +52,9 @@ communityRouter.post('/requests', ensureUser, (req: Request, res: Response) => {
   const b = req.body as { name?: string; category?: string; country?: string; reason?: string; links?: string };
   const name = String(b.name ?? '').trim().slice(0, 80);
   if (name.length < 2) return void res.status(400).json({ error: 'bad_request', message: 'Please enter a name.' });
+  if (isOptedOut(name)) {
+    return void res.status(422).json({ error: 'opted_out', message: `${name} can't be added: they are on Starcall's do-not-simulate list.` });
+  }
   const existingCharacter = search({ q: name, limit: 1 }).items[0];
   if (existingCharacter && normalize(existingCharacter.name) === normalize(name)) {
     return void res.status(409).json({ error: 'exists', message: `${existingCharacter.name} is already on Starcall.`, characterId: existingCharacter.id });

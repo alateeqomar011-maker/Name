@@ -20,15 +20,18 @@ const SELF_HARM = [
   /\bwant\s+to\s+die\b/i,
   /\bself[-\s]?harm\b/i,
   /\bcut(ting)?\s+myself\b/i,
-  /انتحار|انتحر|اقتل نفسي|أقتل نفسي|انهي حياتي|أنهي حياتي|أريد أن أموت|ابي اموت/,
-  /\b(suicidarme|quiero morir(me)?|matarme)\b/i,
-  /\b(me matar|quero morrer|suicídio|suicidio)\b/i,
+  /\b(don['’]?t|do not) want to (live|be alive)\b|\bbetter off dead\b|\bno reason to live\b/i,
+  // Arabic patterns are written in folded form (see foldArabic).
+  /انتحار|انتحر|اقتل نفسي|انهي حياتي|اريد ان اموت|ابي اموت|ابغي اموت|اؤذي نفسي|اذي نفسي|لا اريد ان اعيش|ما ابي اعيش|مابي اعيش|ما ابغي اعيش/,
+  /\b(suicidarme|quiero morir(me)?|matarme|no quiero vivir)\b/i,
+  /\b(me matar|quero morrer|suicídio|suicidio|não quero viver)\b/i,
   /\b(me suicider|envie de mourir)\b/i,
 ];
 
 const SEXUAL = [
   /\b(sex|sexy|sexual|nudes?|naked|porn\w*|horny|nsfw|xxx|onlyfans|blowjob|handjob|orgasm|boobs|tits|dick|cock|pussy|erotic|strip\s*tease|make\s+love|have\s+sex)\b/i,
-  /سكس|جنس|عاري|عارية|إباحي|اباحي|نيك|بزاز/,
+  // Whole Arabic words only (optionally with ال), so تكنيك (technique) or جنسية (nationality) pass.
+  /(?<![\u0621-\u064A])(ال)?(سكس|جنس|عاري|عاريه|اباحي|اباحيه|نيك|بزاز)(?![\u0621-\u064A])/,
   /\b(sexo|desnud[oa]s?|porno|pelad[oa]|nua|transar|follar|coger)\b/i,
 ];
 
@@ -59,7 +62,17 @@ export function declineMessage(lang: string): string {
   return DECLINE[lang] ?? DECLINE.en;
 }
 
-export function localCheck(text: string): { action: ModerationAction; category?: string } {
+/** Folds Arabic letter variants and strips diacritics so one pattern matches common spellings. */
+function foldArabic(text: string): string {
+  return text
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
+}
+
+export function localCheck(input: string): { action: ModerationAction; category?: string } {
+  const text = foldArabic(input);
   if (SELF_HARM.some((re) => re.test(text))) return { action: 'care', category: 'self-harm' };
   if (SEXUAL.some((re) => re.test(text))) return { action: 'block', category: 'sexual' };
   if (SLURS.some((re) => re.test(text))) return { action: 'block', category: 'hate' };

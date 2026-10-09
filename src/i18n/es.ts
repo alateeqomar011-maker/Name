@@ -234,6 +234,7 @@ const es: Partial<Dict> = {
   'requests.thanks': '¡Gracias! Recibimos tu sugerencia.',
   'requests.merged': 'Ya estaba sugerido — contamos tu voto.',
   'requests.exists': '¡Ya está en Starcall!',
+  'requests.opted_out': 'Esta persona pidió no ser simulada, así que no se puede añadir.',
   'requests.votes': 'votos',
   'requests.status.open': 'Abierta',
   'requests.status.planned': 'Planeada',

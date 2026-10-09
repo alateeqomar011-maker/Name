@@ -81,5 +81,8 @@ if (process.argv[1]?.endsWith('server/index.ts')) {
     console.log(`Starcall API on http://localhost:${config.port}`);
     console.log(`  catalogue: ${catalogSize()} characters · AI: ${llm}`);
     console.log(`  server TTS: ${ttsProviders().join(', ') || 'none (browser voices)'} · server STT: ${sttProviders().join(', ') || 'none (browser recognition)'}`);
+    if (config.production && !process.env.SESSION_SECRET) {
+      console.warn('  warning: SESSION_SECRET is not set, so everyone is signed out whenever the server restarts.');
+    }
   });
 }

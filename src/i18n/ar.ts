@@ -239,6 +239,7 @@ const ar: Partial<Dict> = {
   'requests.thanks': 'شكراً! تم استلام اقتراحك.',
   'requests.merged': 'مقترح مسبقاً — احتسبنا صوتك.',
   'requests.exists': 'موجود بالفعل في ستاركول!',
+  'requests.opted_out': 'طلب هذا الشخص عدم محاكاته، لذلك لا يمكن إضافته.',
   'requests.votes': 'صوت',
   'requests.status.open': 'مفتوح',
   'requests.status.planned': 'مخطط',

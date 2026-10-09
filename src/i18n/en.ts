@@ -237,6 +237,7 @@ const en = {
   'requests.thanks': 'Thanks! Your suggestion is in.',
   'requests.merged': 'Already suggested — we counted your vote.',
   'requests.exists': 'Already on Starcall!',
+  'requests.opted_out': 'This person has asked not to be simulated, so they can’t be added.',
   'requests.votes': 'votes',
   'requests.status.open': 'Open',
   'requests.status.planned': 'Planned',

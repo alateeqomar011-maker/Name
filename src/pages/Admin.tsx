@@ -8,6 +8,17 @@ import { Portrait } from '../components/Portrait.tsx';
 
 type Tab = 'overview' | 'characters' | 'new' | 'import' | 'reports' | 'requests' | 'rights' | 'moderation';
 
+const KPIS = [
+  ['users', 'Users'],
+  ['accounts', 'Registered accounts'],
+  ['premium', 'Premium'],
+  ['conversations', 'Conversations'],
+  ['openReports', 'Open reports'],
+  ['openRequests', 'Open requests'],
+  ['openRights', 'Open rights requests'],
+  ['moderationLast24h', 'Moderation flags (24h)'],
+] as const;
+
 function useAdmin() {
   const [token, setTokenState] = useState(() => sessionStorage.getItem('sc.admin') ?? '');
   const setToken = (v: string) => {
@@ -157,10 +168,10 @@ export default function Admin() {
 
       {tab === 'overview' && overview && (
         <div className="kpis">
-          {(['users', 'accounts', 'premium', 'conversations', 'openReports', 'openRequests', 'openRights', 'moderationLast24h'] as const).map((k) => (
+          {KPIS.map(([k, label]) => (
             <div className="kpi" key={k}>
               <b>{String(overview[k])}</b>
-              <small>{k}</small>
+              <small>{label}</small>
             </div>
           ))}
           <div className="kpi">
@@ -207,28 +218,42 @@ export default function Admin() {
                     {c.likeness.status} / {c.voice.authorized ? 'licensed' : 'synthetic'}
                   </td>
                   <td>{c.source}</td>
-                  <td className="row">
-                    <button
-                      className="btn small"
-                      onClick={() => {
-                        setEditing(c.id);
-                        const { source: _s, ...rest } = c;
-                        void _s;
-                        setJson(JSON.stringify(rest, null, 2));
-                        setTab('new');
-                      }}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      className={`btn small${c.enabled ? '' : ' primary'}`}
-                      onClick={async () => {
-                        await call('POST', `/characters/${c.id}/enabled`, { enabled: !c.enabled });
-                        void load();
-                      }}
-                    >
-                      {c.enabled ? 'Disable' : 'Enable'}
-                    </button>
+                  <td>
+                    <div className="row">
+                      <button
+                        className="btn small"
+                        onClick={() => {
+                          setEditing(c.id);
+                          const { source: _s, ...rest } = c;
+                          void _s;
+                          setJson(JSON.stringify(rest, null, 2));
+                          setTab('new');
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className={`btn small${c.enabled ? '' : ' primary'}`}
+                        onClick={async () => {
+                          await call('POST', `/characters/${c.id}/enabled`, { enabled: !c.enabled });
+                          void load();
+                        }}
+                      >
+                        {c.enabled ? 'Disable' : 'Enable'}
+                      </button>
+                      {c.source === 'admin' && (
+                        <button
+                          className="btn small ghost"
+                          onClick={async () => {
+                            if (!window.confirm(`Delete admin changes for ${c.name}? Seed characters revert to their original definition; admin-created ones are removed.`)) return;
+                            await call('DELETE', `/characters/${c.id}`);
+                            void load();
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -276,7 +301,7 @@ export default function Admin() {
             {result && <div className="banner info">{result}</div>}
           </div>
           {tab === 'new' && preview && (
-            <div className="card" style={{ cursor: 'default' }}>
+            <div className="card" style={{ cursor: 'default', alignSelf: 'start' }}>
               <Portrait key={JSON.stringify(preview.look) + preview.colors.join()} character={preview} className="card-img" eager />
             </div>
           )}

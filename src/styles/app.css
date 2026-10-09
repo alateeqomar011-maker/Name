@@ -2158,6 +2158,13 @@ img {
   vertical-align: top;
 }
 
+.admin-table td img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .admin-table th {
   color: var(--faint);
   font-size: 12px;
