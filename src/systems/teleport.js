@@ -1,5 +1,6 @@
 // Fast travel. Destinations are plain data: add one with registerLocation({...}) and it appears in the
 // atlas automatically (a preview image is optional; a map vignette is drawn when none exists).
+import { icon } from '../ui/icons.js';
 import * as THREE from 'three';
 import { BIOME, VOLCANO, REGIONS, ISLANDS } from '../world/worldgen.js';
 import { mulberry32 } from '../core/noise.js';
@@ -493,8 +494,8 @@ export class Teleporter {
   _buildButtons() {
     const bar = document.createElement('div');
     bar.id = 'travelBar';
-    bar.innerHTML = `<button class="tb-btn" data-tab="travel"><span class="i">🧭</span><span class="l">Teleport</span><kbd>Y</kbd></button>
-      <button class="tb-btn" data-tab="season"><span class="i">🍂</span><span class="l">Season</span></button>`;
+    bar.innerHTML = `<button class="tb-btn" data-tab="travel"><span class="i">${icon('compass')}</span><span class="l">Teleport</span><kbd>Y</kbd></button>
+      <button class="tb-btn" data-tab="season"><span class="i">${icon('leaf')}</span><span class="l">Season</span></button>`;
     document.body.appendChild(bar);
     for (const b of bar.querySelectorAll('button')) {
       b.addEventListener('pointerdown', (e) => e.stopPropagation());

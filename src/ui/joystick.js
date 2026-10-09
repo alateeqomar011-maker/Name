@@ -1,3 +1,5 @@
+import { icon } from './icons.js';
+
 // On-screen virtual joystick: drag the knob to move forward/back/left/right.
 // Works with mouse and touch. On touch screens, dragging elsewhere on the screen looks around.
 export class Joystick {
@@ -5,7 +7,7 @@ export class Joystick {
     this.input = input;
     const el = (this.el = document.createElement('div'));
     el.id = 'joystick';
-    el.innerHTML = '<div class="ring"><span class="n">▲</span><span class="s">▼</span><span class="w">◀</span><span class="e">▶</span><div class="knob"></div></div>';
+    el.innerHTML = '<div class="ring"><span class="n"></span><span class="s"></span><span class="w"></span><span class="e"></span><div class="knob"></div></div>';
     document.body.appendChild(el);
     this.knob = el.querySelector('.knob');
     this.ring = el.querySelector('.ring');
@@ -43,7 +45,7 @@ export class Joystick {
     // Sprint button: tap to toggle sprinting on/off (Shift still works on keyboards)
     const sb = (this.sprintBtn = document.createElement('div'));
     sb.id = 'sprintBtn';
-    sb.innerHTML = '<span class="i">🏃</span><span class="t">SPRINT</span>';
+    sb.innerHTML = `<span class="i">${icon('run')}</span><span class="t">SPRINT</span>`;
     document.body.appendChild(sb);
     sb.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -55,7 +57,7 @@ export class Joystick {
     // Jump button: acts like the Space key (tap to jump or toggle the glider, hold to swim up)
     const jb = (this.jumpBtn = document.createElement('div'));
     jb.id = 'jumpBtn';
-    jb.innerHTML = '<span class="i">⤒</span><span class="t">JUMP</span>';
+    jb.innerHTML = `<span class="i">${icon('jump')}</span><span class="t">JUMP</span>`;
     document.body.appendChild(jb);
     let jid = null;
     const jrelease = () => { jid = null; input.keys.delete('Space'); jb.classList.remove('on'); };
@@ -74,7 +76,7 @@ export class Joystick {
     // Take / use button: acts like holding the E key, so tap to pick up and hold to gather
     const tb = (this.takeBtn = document.createElement('div'));
     tb.id = 'takeBtn';
-    tb.innerHTML = '<span class="i">✋</span><span class="t">TAKE</span>';
+    tb.innerHTML = `<span class="i">${icon('hand')}</span><span class="t">TAKE</span>`;
     document.body.appendChild(tb);
     let tid = null;
     const release = () => { tid = null; input.keys.delete('KeyE'); tb.classList.remove('on'); };
@@ -90,20 +92,7 @@ export class Joystick {
     tb.addEventListener('pointerup', (e) => { if (e.pointerId === tid) release(); });
     tb.addEventListener('pointercancel', release);
     tb.addEventListener('click', (e) => e.stopPropagation());
-    // Touch look: drag anywhere else on the game canvas to turn the camera
-    const canvas = input.canvas;
-    let look = null;
-    canvas.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') look = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
-    canvas.addEventListener('pointermove', (e) => {
-      if (!look || e.pointerId !== look.id) return;
-      input.mouse.dx += (e.clientX - look.x) * 1.6;
-      input.mouse.dy += (e.clientY - look.y) * 1.6;
-      look.x = e.clientX; look.y = e.clientY;
-      input.touchLook = true;
-    });
-    const stopLook = () => { look = null; input.touchLook = false; };
-    canvas.addEventListener('pointerup', stopLook);
-    canvas.addEventListener('pointercancel', stopLook);
+    // looking around by dragging on the game view is handled by Input (mouse and touch alike)
   }
   // Show what the take button will do right now
   setTakeLabel(cur) {

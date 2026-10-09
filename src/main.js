@@ -45,7 +45,7 @@ import { WorldEvents } from './systems/events.js';
 import { PhotoMode } from './systems/photo.js';
 import { Interaction } from './systems/interact.js';
 import { FX } from './systems/fx.js';
-import { UI } from './ui/ui.js';
+import { UI, FPS_CHOICES } from './ui/ui.js';
 import { Joystick } from './ui/joystick.js';
 import { Teleporter } from './systems/teleport.js';
 import { Seasons } from './systems/season.js';
@@ -219,7 +219,12 @@ class Game extends Emitter {
       const h = document.getElementById('lockhint');
       if (h) h.classList.toggle('hidden', locked || this.state !== 'playing' || matchMedia('(pointer: coarse)').matches);
     };
-    canvas.addEventListener('click', () => { if (matchMedia('(pointer: coarse)').matches) return; if (this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal) this.input.lock(); });
+    canvas.addEventListener('click', () => {
+      // a drag that turned the camera is not a click; touch screens and drag-only players never capture
+      if (this.input.suppressClick) { this.input.suppressClick = false; return; }
+      if (matchMedia('(pointer: coarse)').matches || this.settings.mouseCapture === false) return;
+      if (this.state === 'playing' && !this.ui.menuOpen && !this.ui.modal) this.input.lock();
+    });
     addEventListener('keydown', (e) => { if (e.code === 'F5') { e.preventDefault(); if (this.state === 'playing') { this.save(); this.ui.notify('Game saved.', 'good'); } } });
     window.__game = this;
   }
@@ -265,9 +270,35 @@ class Game extends Emitter {
       label();
       this.applySettings(true);
     };
-    document.getElementById('btnControls').onclick = () => {
-      alert('WASD move · Shift sprint · Space jump/glide · C crouch · V camera view · E interact (hold to gather) · F vehicles · P photo mode · B build · Tab pack/crafting · M map · J journal · N missions · K skills · G summon vehicle · T tracker · L headlamp · 1-5 hotbar · Left click use item · Right mouse binoculars · Esc pause');
+    const bf = document.getElementById('btnFps');
+    const fpsLabel = () => (bf.textContent = 'Frame rate: ' + (this.settings.fpsTarget === 'max' ? 'Max' : this.settings.fpsTarget));
+    fpsLabel();
+    bf.onclick = () => {
+      const order = FPS_CHOICES.map(([v]) => v);
+      const cur = String(this.settings.fpsTarget ?? 120);
+      const nxt = order[(order.indexOf(cur) + 1) % order.length];
+      this.settings.fpsTarget = nxt === 'max' ? 'max' : +nxt;
+      fpsLabel();
+      this.applySettings();
     };
+    document.getElementById('btnControls').onclick = () => this._controlsPanel();
+  }
+
+  // full controls reference for keyboard/mouse and touch, shown from the title screen
+  _controlsPanel() {
+    if (document.getElementById('ctrlPanel')) return;
+    const kb = [['W A S D', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump · glide · swim up'], ['C', 'Crouch · dive'], ['Mouse / drag', 'Look around'], ['V', 'First / third person'],
+      ['E (hold)', 'Interact · gather'], ['F', 'Vehicles'], ['Left click', 'Use hotbar item'], ['Right mouse', 'Binoculars'], ['1 – 5', 'Hotbar slot'], ['P', 'Photo mode'],
+      ['B', 'Build'], ['Y', 'Teleport atlas'], ['Tab', 'Pack & crafting'], ['M', 'Map'], ['J', 'Journal'], ['N', 'Missions'], ['K', 'Skills'], ['Esc', 'Pause · settings']];
+    const touch = [['Left stick', 'Move'], ['Drag the view', 'Look around'], ['Sprint', 'Toggle running'], ['Jump', 'Jump · glide'], ['Take / Hold', 'Pick up · gather'], ['FPS chip', 'Change frame rate']];
+    const el = document.createElement('div');
+    el.id = 'ctrlPanel';
+    el.innerHTML = `<div class="cp-card"><header><h3>Controls</h3><button class="cp-x" aria-label="Close">✕</button></header>
+      <div class="cp-cols"><section><h4>Keyboard &amp; mouse</h4><div class="keys">${kb.map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div></section>
+      <section><h4>Touch</h4><div class="keys">${touch.map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div></section></div></div>`;
+    document.body.appendChild(el);
+    const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 220); };
+    el.addEventListener('click', (e) => { if (e.target === el || e.target.closest('.cp-x')) close(); });
   }
 
   start(load) {
@@ -367,6 +398,9 @@ class Game extends Emitter {
     this.audio.setMusicVolume(S.music);
     this.input.sensitivity = S.sens;
     this.input.invertY = S.invertY;
+    this.input.touchSens = S.touchSens ?? 1;
+    this.input.smoothing = S.camSmooth ?? 0.35;
+    this.input.captureEnabled = S.mouseCapture !== false;
     this.cam.baseFov = S.fov;
     this.clock.hourLength = (S.dayLength * 60) / 24;
   }
@@ -405,7 +439,7 @@ class Game extends Emitter {
 
   get fpsGoal() {
     const t = this.settings.fpsTarget === 'max' ? 1000 : +this.settings.fpsTarget || 120;
-    return Math.max(30, Math.min(t, this.refreshHz || 60));
+    return Math.max(24, Math.min(t, this.refreshHz || 60));
   }
 
   // Dynamic resolution and effect scaling to hold the frame-rate goal. Resolution moves first;
@@ -477,6 +511,16 @@ class Game extends Emitter {
   // ---------- Main loop ----------
   frame() {
     const now = performance.now();
+    // the display rate is measured on every refresh callback, before the limiter skips any
+    if (this._rafLast) this._trackRefresh((now - this._rafLast) / 1000);
+    this._rafLast = now;
+    // frame limiter: a cap below the display rate skips refreshes so frames arrive evenly
+    const cap = this.settings.fpsTarget === 'max' ? 0 : +this.settings.fpsTarget || 0;
+    if (cap && cap < (this.refreshHz || 60) - 2) {
+      const iv = 1000 / cap;
+      if (this._capT && now - this._capT < iv - 1.5) return;
+      this._capT = this._capT && now - this._capT < iv * 2 ? this._capT + iv : now;
+    } else this._capT = 0;
     let dt = (now - this.last) / 1000;
     this.last = now;
     dt = Math.min(dt, 0.05);
@@ -782,7 +826,6 @@ class Game extends Emitter {
     const now = performance.now();
     if (this._lastRenderT) {
       const raw = (now - this._lastRenderT) / 1000;
-      this._trackRefresh(raw);
       this._fpsMeter(raw);
       this._governResolution(raw, this._workMs || 0);
     }

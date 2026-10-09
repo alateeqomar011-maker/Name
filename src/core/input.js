@@ -12,6 +12,14 @@ export class Input {
     this.enabled = true;
     this.sensitivity = 0.0022;
     this.invertY = false;
+    // drag-to-look (mouse without pointer lock, or a finger on the game view): deltas in
+    // screen pixels already scaled per device, plus a release velocity for a natural fling
+    this.drag = { dx: 0, dy: 0, active: false, vx: 0, vy: 0, released: false };
+    this.touchSens = 1;
+    this.smoothing = 0.35;
+    this.suppressClick = false;
+    this._look = null;
+    this._bindDragLook(canvas);
     addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
       if (['Tab', 'Space', 'ArrowUp', 'ArrowDown', 'F1'].includes(e.code) || (e.code === 'KeyW' && e.ctrlKey)) e.preventDefault();
@@ -41,7 +49,46 @@ export class Input {
       if (this.onLockChange) this.onLockChange(this.locked);
     });
   }
+  _bindDragLook(canvas) {
+    const D = this.drag;
+    canvas.addEventListener('pointerdown', (e) => {
+      if (this.locked || !this.enabled || this._look) return;
+      if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 2) return;
+      this._look = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, touch: e.pointerType !== 'mouse' };
+      D.active = true; D.vx = D.vy = 0; D.released = false;
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic pointer */ }
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      const L = this._look;
+      if (!L || e.pointerId !== L.id) return;
+      const dx = e.clientX - L.x, dy = e.clientY - L.y;
+      L.x = e.clientX; L.y = e.clientY;
+      // a small dead zone keeps taps and clicks from nudging the view
+      if (!L.moved && Math.hypot(e.clientX - L.sx, e.clientY - L.sy) > (L.touch ? 4 : 5)) L.moved = true;
+      if (!L.moved || !this.enabled) return;
+      const k = L.touch ? 1.6 * this.touchSens : 1;
+      D.dx += dx * k; D.dy += dy * k;
+      const now = performance.now(), ms = Math.max(4, now - L.t);
+      L.t = now;
+      const b = Math.min(1, ms / 40);
+      D.vx += ((dx * k) / ms * 1000 - D.vx) * b;
+      D.vy += ((dy * k) / ms * 1000 - D.vy) * b;
+    });
+    const end = (e) => {
+      const L = this._look;
+      if (!L || e.pointerId !== L.id) return;
+      if (L.moved && !L.touch) this.suppressClick = true;
+      // a finger that stopped before lifting shouldn't fling
+      if (performance.now() - L.t > 70) D.vx = D.vy = 0;
+      D.active = false; D.released = L.moved;
+      this._look = null;
+    };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('lostpointercapture', end);
+  }
   lock() {
+    if (this.captureEnabled === false) return;
     // raw mouse input (no OS acceleration / smoothing) where supported: the most direct aim
     const plain = () => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { /* ignore */ } };
     try {
@@ -67,6 +114,7 @@ export class Input {
   endFrame() {
     this.pressed.clear();
     this.mouse.dx = this.mouse.dy = this.mouse.wheel = 0;
+    this.drag.dx = this.drag.dy = 0;
     this.mouse.leftPressed = this.mouse.rightPressed = false;
   }
 }

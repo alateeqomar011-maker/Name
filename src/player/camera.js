@@ -37,11 +37,36 @@ export class CameraRig {
     const g = this.game;
     const p = g.player;
     const cam = this.camera;
+    // Look input from the captured mouse, mouse drags and finger drags is gathered as a pending
+    // rotation that the view eases into (adjustable smoothing), and a quick flick keeps turning
+    // briefly with decaying momentum. A captured mouse uses a lighter filter for precise aim.
     const sens = input.sensitivity * (this.fov / this.baseFov);
-    if (input.locked || input.touchLook) {
-      this.yaw -= input.mouse.dx * sens;
-      this.pitch -= input.mouse.dy * sens * (input.invertY ? -1 : 1);
+    const inv = input.invertY ? -1 : 1;
+    const D = input.drag;
+    let px = D.dx, py = D.dy;
+    if (input.locked) { px += input.mouse.dx; py += input.mouse.dy; }
+    this._pYaw = (this._pYaw || 0) - px * sens;
+    this._pPitch = (this._pPitch || 0) - py * sens * inv;
+    const sm = Math.max(0, Math.min(1, input.smoothing));
+    if (D.active || input.locked) { this._vYaw = 0; this._vPitch = 0; }
+    if (D.released) {
+      D.released = false;
+      const k = sm * 0.55;
+      this._vYaw = -D.vx * sens * k;
+      this._vPitch = -D.vy * sens * inv * k * 0.4;
     }
+    if (this._vYaw || this._vPitch) {
+      this._pYaw += this._vYaw * dt; this._pPitch += this._vPitch * dt;
+      const f = Math.exp(-dt / 0.2);
+      this._vYaw *= f; this._vPitch *= f;
+      if (Math.abs(this._vYaw) + Math.abs(this._vPitch) < 0.01) this._vYaw = this._vPitch = 0;
+    }
+    const tau = sm * (input.locked ? 0.05 : 0.12);
+    const a = tau > 0.001 ? 1 - Math.exp(-dt / tau) : 1;
+    const dyaw = this._pYaw * a, dpit = this._pPitch * a;
+    this.yaw += dyaw; this.pitch += dpit;
+    this._pYaw -= dyaw; this._pPitch -= dpit;
+    if (this.pitch > 1.45 || this.pitch < -1.45) { this._pPitch = 0; this._vPitch = 0; }
     this.pitch = clamp(this.pitch, -1.45, 1.45);
     if (!p.photoMode && !g.ui.menuOpen && input.mouse.wheel && this.mode === 'third') this.dist = clamp(this.dist + input.mouse.wheel * 0.8, 2.2, p.inVehicle ? 30 : 12);
 

@@ -7,6 +7,9 @@ import { POI_TYPES } from '../world/pois.js';
 import { EVENT_INFO } from '../systems/events.js';
 import { HALF, WORLD_SIZE, BIOME_NAMES } from '../world/worldgen.js';
 import { FOG_N } from '../systems/journal.js';
+import { icon } from './icons.js';
+
+export const FPS_CHOICES = [['30', '30'], ['45', '45'], ['60', '60'], ['90', '90'], ['120', '120'], ['144', '144'], ['165', '165'], ['240', '240'], ['max', 'Max']];
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -22,7 +25,7 @@ export class UI {
       <div id="underwater"></div>
       <div id="vignette"></div>
       <div id="binoc" class="hidden"></div>
-      <div class="topleft"><div class="clock" id="clock">07:30</div><div class="sub" id="dayline">Day 1</div><div class="region" id="region"></div><div class="fps" id="fps"></div></div>
+      <div class="topleft"><div class="tl-card"><div class="clock" id="clock">07:30</div><div class="sub" id="dayline">Day 1</div><div class="region" id="region"></div></div><button class="fps" id="fps" title="Frame rate — tap to change"></button><div id="fpsPop" class="hidden"></div></div>
       <div id="compass"><div class="strip" id="cstrip"></div><div class="center"></div></div>
       <div id="minimap"><canvas id="mm" width="190" height="190"></canvas></div>
       <div class="mmlabel" id="mmlabel"></div>
@@ -34,7 +37,7 @@ export class UI {
       <div id="banner"><div class="t"></div><div class="rule"></div><div class="s"></div></div>
       <div id="eventBanner"></div>
       <div id="regionname"></div>
-      <div id="radio"><div class="av">📻</div><div class="who"></div><div class="tx"></div></div>
+      <div id="radio"><div class="av">${icon('flag')}</div><div class="who"></div><div class="tx"></div></div>
       <div id="xppop"></div>
       <div id="viewfinder" class="hidden"><div class="thirds"></div><div class="frame"><div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div></div><div class="focus"></div><div class="info"><span class="rec">● REC</span><span id="vfz">1.0x</span><span id="vfs"></span></div></div>
       <div id="flash"></div>
@@ -42,15 +45,33 @@ export class UI {
       <div id="buildbar" class="hidden"></div>
       <div class="vitals">
         <div class="status" id="status"></div>
-        ${['hp:❤️:var(--hp)', 'st:⚡:var(--st)', 'hu:🍖:var(--hu)', 'th:💧:var(--th)', 'ox:🫧:#9fe8ff'].map((s) => { const [k, i, c] = s.split(':'); return `<div class="vital" id="v-${k}"><span class="ic">${i}</span><div class="track"><div class="fill" style="background:${c}"></div></div></div>`; }).join('')}
+        ${[['hp', 'heart', 'var(--hp)'], ['st', 'bolt', 'var(--st)'], ['hu', 'food', 'var(--hu)'], ['th', 'drop', 'var(--th)'], ['ox', 'air', 'var(--ox)']].map(([k, i, c]) => `<div class="vital" id="v-${k}" style="--c:${c}"><span class="ic">${icon(i)}</span><div class="track"><div class="fill"></div></div></div>`).join('')}
       </div>
       <div class="bottom">
         <div class="hotbar" id="hotbar"></div>
         <div class="xp"><div class="row"><span><b id="lvl">LV 1</b> &nbsp;<span id="ttl"></span></span><span id="xptxt"></span></div><div class="track"><div class="fill" id="xpfill"></div></div></div>
       </div>
       <div id="photoResult" class="hidden"></div>
-      <div id="lockhint" class="hidden">Mouse free — use the joystick, or click the game to look around · Esc: menu</div>`;
+      <div id="lockhint" class="hidden">Drag to look around · click to capture the mouse · Esc: menu</div>`;
     this.mm = $('#mm').getContext('2d');
+    // frame-rate quick picker on the FPS chip
+    const fpsBtn = $('#fps'), fpsPop = $('#fpsPop');
+    const renderPop = () => {
+      const cur = String(this.game.settings.fpsTarget ?? 120);
+      fpsPop.innerHTML = `<div class="fp-h">Frame rate</div><div class="seg">${FPS_CHOICES.map(([v, n]) => `<button data-fps="${v}" class="${cur === v ? 'on' : ''}">${n}</button>`).join('')}</div><div class="fp-n">Display: ${this.game.refreshHz || 60} Hz</div>`;
+    };
+    fpsBtn.addEventListener('click', (e) => { e.stopPropagation(); renderPop(); fpsPop.classList.toggle('hidden'); });
+    fpsPop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const b = e.target.closest('[data-fps]');
+      if (!b) return;
+      this.game.settings.fpsTarget = b.dataset.fps === 'max' ? 'max' : +b.dataset.fps;
+      this.game.applySettings();
+      renderPop();
+      this.notify(`Frame rate: ${b.dataset.fps === 'max' ? 'unlimited' : b.dataset.fps + ' FPS'}`, 'info', 1.6);
+      setTimeout(() => fpsPop.classList.add('hidden'), 350);
+    });
+    addEventListener('pointerdown', (e) => { if (!fpsPop.contains(e.target) && e.target !== fpsBtn) fpsPop.classList.add('hidden'); });
     this.toasts = $('#toasts');
     this._bannerT = 0;
     this._radioT = 0;
@@ -473,7 +494,7 @@ export class UI {
   }
 
   renderMenu() {
-    const tabs = [['inventory', 'Pack & Crafting', 'Tab'], ['skills', 'Explorer', 'K'], ['journal', 'Field Journal', 'J'], ['missions', 'Missions', 'N'], ['map', 'Map', 'M'], ['settings', 'Settings', 'Esc']];
+    const tabs = [['inventory', 'Pack & Crafting', 'Tab', 'pack'], ['skills', 'Explorer', 'K', 'user'], ['journal', 'Field Journal', 'J', 'book'], ['missions', 'Missions', 'N', 'flag'], ['map', 'Map', 'M', 'map'], ['settings', 'Settings', 'Esc', 'sliders']];
     let body = '';
     switch (this.tab) {
       case 'inventory': body = this._invHTML(); break;
@@ -483,7 +504,7 @@ export class UI {
       case 'map': body = `<div id="mapwrap"><canvas id="mapcv"></canvas><div class="mapside">${this._mapSide()}</div></div>`; break;
       case 'settings': body = this._settingsHTML(); break;
     }
-    this.menu.innerHTML = `<div class="tabs">${tabs.map(([id, n, k]) => `<div class="tab ${this.tab === id ? 'on' : ''}" data-tab="${id}">${n}<span class="key">${k}</span></div>`).join('')}<div class="close" data-act="close">✕ Close</div></div><div class="body">${body}</div>`;
+    this.menu.innerHTML = `<div class="tabs"><div class="brand">PRIMEVAL</div><nav>${tabs.map(([id, n, k, ic]) => `<div class="tab ${this.tab === id ? 'on' : ''}" data-tab="${id}">${icon(ic)}<span class="tn">${n}</span><span class="key">${k}</span></div>`).join('')}</nav><div class="close" data-act="close" title="Close">${icon('close')}<span>Resume</span></div></div><div class="body">${body}</div>`;
     if (this.tab === 'map') this._initMap();
     if (this.tab === 'settings') this._bindSettings();
   }
@@ -726,33 +747,63 @@ export class UI {
     const keys = [['W A S D', 'Move'], ['Shift', 'Sprint'], ['Space', 'Jump / swim up / glider'], ['C', 'Crouch / dive'], ['V', 'Switch 1st / 3rd person'], ['E (hold)', 'Interact / gather'], ['F', 'Enter / exit vehicle'],
       ['Left click', 'Use hotbar item'], ['1 – 5', 'Select hotbar slot'], ['Right mouse', 'Binoculars (when owned)'], ['P', 'Camera mode'], ['B', 'Build mode'], ['R', 'Rotate structure'], ['U / X', 'Upgrade / dismantle structure'],
       ['G', 'Summon vehicle'], ['T', 'Bio-tracker'], ['L', 'Headlamp'], ['Tab / I', 'Pack & crafting'], ['K', 'Explorer skills'], ['J', 'Field journal'], ['N', 'Missions'], ['M', 'Map'], ['Esc', 'Pause / settings'], ['F5', 'Quick save']];
-    return `<div class="cols"><div class="settings"><h3>Settings</h3>
-      <label>Graphics quality <select id="s-q" class="pointer">${['low', 'medium', 'high', 'ultra'].map((q) => `<option ${S.quality === q ? 'selected' : ''}>${q}</option>`).join('')}</select></label>
-      <label>Master volume <input id="s-vol" type="range" min="0" max="1" step="0.05" value="${S.volume}"></label>
-      <label>Music volume <input id="s-mus" type="range" min="0" max="1" step="0.05" value="${S.music}"></label>
-      <label>Mouse sensitivity <input id="s-sens" type="range" min="0.0006" max="0.005" step="0.0002" value="${S.sens}"></label>
-      <label>Field of view <input id="s-fov" type="range" min="55" max="95" step="1" value="${S.fov}"></label>
-      <label>Invert mouse Y <input id="s-inv" type="checkbox" class="pointer" ${S.invertY ? 'checked' : ''}></label>
-      <label>Frame rate <select id="s-fps" class="pointer">${[['60', '60 FPS'], ['120', '120 FPS'], ['144', '144 FPS'], ['max', 'Unlimited']].map(([v, n]) => `<option value="${v}" ${String(S.fpsTarget ?? 120) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-      <label>Show FPS counter <input id="s-showfps" type="checkbox" class="pointer" ${S.showFps !== false ? 'checked' : ''}></label>
-      <p style="color:var(--muted);font-size:11px;margin:-4px 0 4px">Your screen refreshes at ${g.refreshHz || 60} Hz${(g.refreshHz || 60) < 120 ? ' — the game can\'t show more frames than that, so 120 FPS needs a 120 Hz display' : ''}. Resolution and effects adjust automatically to hold the target.</p>
-      <label>Day length (minutes) <select id="s-day" class="pointer">${[12, 24, 48, 96].map((d) => `<option ${S.dayLength === d ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
-      <div style="display:flex;gap:10px;margin-top:10px"><button class="btn pointer" data-act="save">Save Game</button><button class="btn pointer" data-act="close">Resume</button><button class="btn pointer" data-act="newgame">New Expedition</button></div>
-      <p style="color:var(--muted);font-size:12px">The game autosaves every minute and when you sleep.</p>
-    </div><div><h3>Controls</h3><div class="keys">${keys.map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</div></div></div>`;
+    const range = (id, label, min, max, step, val, fmt) => `<label class="row"><span class="lb">${label}</span><span class="ctl"><input id="${id}" type="range" min="${min}" max="${max}" step="${step}" value="${val}"><output>${fmt(val)}</output></span></label>`;
+    const toggle = (id, label, on, hint = '') => `<label class="row"><span class="lb">${label}${hint ? `<small>${hint}</small>` : ''}</span><span class="switch"><input id="${id}" type="checkbox" class="pointer" ${on ? 'checked' : ''}><i></i></span></label>`;
+    const seg = (id, items, cur) => `<div class="seg" id="${id}">${items.map(([v, n]) => `<button data-v="${v}" class="${String(cur) === v ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+    const hz = g.refreshHz || 60;
+    return `<div class="settings-wrap">
+      <div class="set-head"><h3>Settings</h3><p>Changes apply instantly and are remembered on this device.</p></div>
+      <div class="set-grid">
+        <section class="card"><h4>${icon('gauge')} Display</h4>
+          <div class="row col"><span class="lb">Graphics quality</span>${seg('s-q', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']], S.quality)}</div>
+          <div class="row col"><span class="lb">Frame rate <small>Your display shows up to ${hz} Hz${hz < 120 ? ' — higher targets need a faster screen' : ''}</small></span>${seg('s-fps', FPS_CHOICES, S.fpsTarget ?? 120)}</div>
+          ${toggle('s-showfps', 'Show FPS counter', S.showFps !== false)}
+          ${range('s-fov', 'Field of view', 55, 95, 1, S.fov, (v) => v + '°')}
+          <p class="note">Resolution and effects adapt automatically to hold your frame-rate target.</p>
+        </section>
+        <section class="card"><h4>${icon('compass')} Camera &amp; controls</h4>
+          ${range('s-sens', 'Look sensitivity', 0.0006, 0.005, 0.0002, S.sens, (v) => (v / 0.0022).toFixed(1) + '×')}
+          ${range('s-tsens', 'Touch sensitivity', 0.4, 2.5, 0.1, S.touchSens ?? 1, (v) => (+v).toFixed(1) + '×')}
+          ${range('s-smooth', 'Camera smoothing', 0, 1, 0.05, S.camSmooth ?? 0.35, (v) => (+v === 0 ? 'Off' : Math.round(v * 100) + '%'))}
+          ${toggle('s-inv', 'Invert vertical look', S.invertY)}
+          ${toggle('s-cap', 'Click captures the mouse', S.mouseCapture !== false, 'Off: drag with the mouse to look around')}
+        </section>
+        <section class="card"><h4>${icon('sliders')} Audio &amp; world</h4>
+          ${range('s-vol', 'Master volume', 0, 1, 0.05, S.volume, (v) => Math.round(v * 100) + '%')}
+          ${range('s-mus', 'Music volume', 0, 1, 0.05, S.music, (v) => Math.round(v * 100) + '%')}
+          <div class="row col"><span class="lb">Day length</span>${seg('s-day', [12, 24, 48, 96].map((d) => [String(d), d + ' min']), S.dayLength)}</div>
+          <div class="actions"><button class="btn primary pointer" data-act="close">${icon('play')} Resume</button><button class="btn pointer" data-act="save">Save game</button><button class="btn ghost pointer" data-act="newgame">New expedition</button></div>
+          <p class="note">The game autosaves every minute and when you sleep.</p>
+        </section>
+        <section class="card wide"><h4>${icon('keys')} Controls</h4><div class="keys">${keys.map(([k, d]) => `<div><kbd>${k}</kbd><span>${d}</span></div>`).join('')}<div><kbd>Drag</kbd><span>Look around (mouse or finger)</span></div></div></section>
+      </div>
+    </div>`;
   }
 
   _bindSettings() {
     const g = this.game;
     const S = g.settings;
-    $('#s-q').onchange = (e) => { S.quality = e.target.value; g.applySettings(true); };
-    $('#s-vol').oninput = (e) => { S.volume = +e.target.value; g.applySettings(); };
-    $('#s-mus').oninput = (e) => { S.music = +e.target.value; g.applySettings(); };
-    $('#s-sens').oninput = (e) => { S.sens = +e.target.value; g.applySettings(); };
-    $('#s-fov').oninput = (e) => { S.fov = +e.target.value; g.applySettings(); };
+    const segBind = (id, fn) => {
+      const el = $('#' + id);
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-v]');
+        if (!b) return;
+        el.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+        fn(b.dataset.v);
+      });
+    };
+    segBind('s-q', (v) => { S.quality = v; g.applySettings(true); });
+    segBind('s-fps', (v) => { S.fpsTarget = v === 'max' ? 'max' : +v; g.applySettings(); });
+    segBind('s-day', (v) => { S.dayLength = +v; g.applySettings(); });
+    const out = (e, txt) => { const o = e.target.parentNode.querySelector('output'); if (o) o.textContent = txt; };
+    $('#s-vol').oninput = (e) => { S.volume = +e.target.value; out(e, Math.round(S.volume * 100) + '%'); g.applySettings(); };
+    $('#s-mus').oninput = (e) => { S.music = +e.target.value; out(e, Math.round(S.music * 100) + '%'); g.applySettings(); };
+    $('#s-sens').oninput = (e) => { S.sens = +e.target.value; out(e, (S.sens / 0.0022).toFixed(1) + '×'); g.applySettings(); };
+    $('#s-tsens').oninput = (e) => { S.touchSens = +e.target.value; out(e, S.touchSens.toFixed(1) + '×'); g.applySettings(); };
+    $('#s-smooth').oninput = (e) => { S.camSmooth = +e.target.value; out(e, S.camSmooth === 0 ? 'Off' : Math.round(S.camSmooth * 100) + '%'); g.applySettings(); };
+    $('#s-fov').oninput = (e) => { S.fov = +e.target.value; out(e, S.fov + '°'); g.applySettings(); };
     $('#s-inv').onchange = (e) => { S.invertY = e.target.checked; g.applySettings(); };
-    $('#s-day').onchange = (e) => { S.dayLength = +e.target.value; g.applySettings(); };
-    $('#s-fps').onchange = (e) => { S.fpsTarget = e.target.value === 'max' ? 'max' : +e.target.value; g.applySettings(); };
+    $('#s-cap').onchange = (e) => { S.mouseCapture = e.target.checked; g.applySettings(); };
     $('#s-showfps').onchange = (e) => { S.showFps = e.target.checked; g.applySettings(); };
   }
 }

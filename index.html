@@ -2,11 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d0c" />
   <title>Primeval Frontier</title>
   <meta name="description" content="An open-world prehistoric survival and exploration game." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
   <canvas id="game"></canvas>
@@ -14,13 +15,20 @@
   <div id="menu" class="hidden"></div>
   <div id="fade"></div>
   <div id="title">
-    <h1>PRIMEVAL</h1>
-    <h2>THE LOST FRONTIER</h2>
+    <div class="ttl-sky"></div>
+    <div class="ttl-brand">
+      <div class="ttl-kicker">An open-world prehistoric expedition</div>
+      <h1>PRIMEVAL</h1>
+      <h2>The Lost Frontier</h2>
+    </div>
     <div class="menu hidden" id="titleMenu">
-      <button class="btn" id="btnContinue">Continue Expedition</button>
+      <button class="btn primary" id="btnContinue">Continue Expedition</button>
       <button class="btn" id="btnNew">New Expedition</button>
-      <button class="btn" id="btnQuality">Graphics: High</button>
-      <button class="btn" id="btnControls">Controls</button>
+      <div class="ttl-row">
+        <button class="btn ghost" id="btnQuality">Graphics: High</button>
+        <button class="btn ghost" id="btnFps">Frame rate: 120</button>
+      </div>
+      <button class="btn ghost" id="btnControls">Controls</button>
     </div>
     <div id="loading"><div class="bar"><div class="fill"></div></div><div class="msg">Shaping the continent…</div></div>
     <div class="tip" id="tip"></div>
