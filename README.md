@@ -173,6 +173,20 @@ Tests use an in-memory database and blank out all provider keys, so they never c
 
 ## Deployment
 
+### Render (public link in a few clicks)
+
+[`render.yaml`](render.yaml) describes the whole service.
+
+1. Sign in at [render.com](https://render.com) with GitHub.
+2. Choose **New → Blueprint** and pick this repository. The blueprint uses the `claude/ai-celebrity-video-calls` branch.
+3. Optionally paste an `ANTHROPIC_API_KEY`. Without one, the app runs in the labelled demo mode.
+4. Click **Apply**. Render generates `SESSION_SECRET` and `ADMIN_TOKEN` for you, and the token is shown under the service's *Environment* tab.
+5. The first build takes a few minutes, then the app is live at `https://<service-name>.onrender.com`.
+
+The free plan sleeps after inactivity, so the first visit after a while takes about a minute. It also has no persistent disk, so accounts and history reset on restart. For a permanent setup, switch to a paid plan and add a disk mounted at `DATA_DIR`.
+
+### Any Node host
+
 ```bash
 npm ci && npm run build
 NODE_ENV=production SESSION_SECRET=… ADMIN_TOKEN=… ANTHROPIC_API_KEY=… npm start

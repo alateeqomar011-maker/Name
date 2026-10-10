@@ -30,7 +30,8 @@ function int(value: string | undefined, fallback: number): number {
 export const config = {
   port: int(env.PORT, 8787),
   production: env.NODE_ENV === 'production',
-  publicUrl: env.PUBLIC_URL ?? `http://localhost:${int(env.PORT, 8787)}`,
+  // RENDER_EXTERNAL_URL is set automatically on Render (see render.yaml).
+  publicUrl: env.PUBLIC_URL ?? env.RENDER_EXTERNAL_URL ?? `http://localhost:${int(env.PORT, 8787)}`,
   dataDir: resolve(env.DATA_DIR ?? './data'),
   sessionSecret: env.SESSION_SECRET ?? randomBytes(32).toString('hex'),
   adminToken: env.ADMIN_TOKEN ?? '',

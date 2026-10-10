@@ -1,0 +1,22 @@
+# Hosting on Render (https://render.com): Dashboard → New → Blueprint → pick this repository.
+# The free plan has no persistent disk, so accounts and history reset when the service restarts;
+# switch to a paid plan and add a disk mounted at DATA_DIR to keep them.
+services:
+  - type: web
+    name: starcall
+    runtime: node
+    plan: free
+    branch: claude/ai-celebrity-video-calls
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.22.0
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_TOKEN
+        generateValue: true
+      # Paste a key for real AI conversations; leave empty for the labelled demo mode.
+      - key: ANTHROPIC_API_KEY
+        sync: false
