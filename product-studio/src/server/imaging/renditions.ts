@@ -17,7 +17,9 @@ export const MIME: Record<OutputFormat, string> = {
   webp: "image/webp",
 };
 
-const NEVER_WATERMARK = new Set(["original", "logo"]);
+// Originals and logos belong to the seller; cut-outs follow the industry norm of
+// clean but resolution-capped results on the free plan.
+const NEVER_WATERMARK = new Set(["original", "logo", "cutout"]);
 
 export function shouldWatermark(ws: Pick<Workspace, "plan">, asset: Pick<Asset, "kind">) {
   return getPlan(ws.plan).limits.watermark && !NEVER_WATERMARK.has(asset.kind);

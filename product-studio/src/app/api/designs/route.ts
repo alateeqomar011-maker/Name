@@ -21,7 +21,7 @@ export const GET = route(async (req) => {
     .where(and(...where))
     .orderBy(desc(designs.updatedAt))
     .limit(100);
-  return json({ items: rows.map((d) => designDto(d, false)) });
+  return json({ items: rows.map((d) => designDto(d, true)) });
 });
 
 const schema = z.object({

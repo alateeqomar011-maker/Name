@@ -1,3 +1,4 @@
+import { getPlan } from "@/lib/plans";
 import { getAsset } from "@/server/assets";
 import { requireAuth } from "@/server/auth/session";
 import { route } from "@/server/http";
@@ -10,7 +11,8 @@ export const GET = route<Ctx>(async (req, { params }) => {
   const auth = await requireAuth();
   const { id } = await params;
   const asset = await getAsset(auth.workspace.id, id);
-  const w = Number(new URL(req.url).searchParams.get("w") ?? 1024) || 1024;
+  const requested = Number(new URL(req.url).searchParams.get("w") ?? 1024) || 1024;
+  const w = Math.min(requested, Math.min(2048, getPlan(auth.workspace.plan).limits.maxExportPx));
   const watermark = shouldWatermark(auth.workspace, asset);
   const data = await previewRendition(asset, w, watermark);
   return new Response(new Uint8Array(data), {

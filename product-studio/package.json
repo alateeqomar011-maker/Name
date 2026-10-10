@@ -14,8 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "models:download": "node scripts/download-models.mjs",
     "setup": "node scripts/download-models.mjs",
-    "stripe:setup": "tsx scripts/stripe-setup.ts",
-    "samples:build": "tsx scripts/build-samples.ts"
+    "stripe:setup": "tsx --conditions=react-server scripts/stripe-setup.ts",
+    "samples:build": "tsx --conditions=react-server scripts/build-samples.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
