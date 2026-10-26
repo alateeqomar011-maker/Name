@@ -1,0 +1,1672 @@
+{
+ "riwayah": "Ḥafṣ ʿan ʿĀṣim",
+ "ayahCount": 6236,
+ "surahs": [
+  {
+   "n": 1,
+   "ar": "الفَاتِحة",
+   "en": "Al-Fātiḥah",
+   "meaning": "The Opening",
+   "revelation": "makki",
+   "ayahs": 7,
+   "basmalah": false,
+   "pages": [
+    1,
+    1
+   ]
+  },
+  {
+   "n": 2,
+   "ar": "البَقَرَة",
+   "en": "Al-Baqarah",
+   "meaning": "The Cow",
+   "revelation": "madani",
+   "ayahs": 286,
+   "basmalah": true,
+   "pages": [
+    2,
+    49
+   ]
+  },
+  {
+   "n": 3,
+   "ar": "آل عِمران",
+   "en": "Āl-‘Imrān",
+   "meaning": "Family of Imran",
+   "revelation": "madani",
+   "ayahs": 200,
+   "basmalah": true,
+   "pages": [
+    50,
+    76
+   ]
+  },
+  {
+   "n": 4,
+   "ar": "النِّسَاء",
+   "en": "An-Nisā’",
+   "meaning": "The Women",
+   "revelation": "madani",
+   "ayahs": 176,
+   "basmalah": true,
+   "pages": [
+    77,
+    106
+   ]
+  },
+  {
+   "n": 5,
+   "ar": "المَائدة",
+   "en": "Al-Mā’idah",
+   "meaning": "The Table Spread",
+   "revelation": "madani",
+   "ayahs": 120,
+   "basmalah": true,
+   "pages": [
+    106,
+    127
+   ]
+  },
+  {
+   "n": 6,
+   "ar": "الأنعَام",
+   "en": "Al-An‘ām",
+   "meaning": "The Cattle",
+   "revelation": "makki",
+   "ayahs": 165,
+   "basmalah": true,
+   "pages": [
+    128,
+    150
+   ]
+  },
+  {
+   "n": 7,
+   "ar": "الأعرَاف",
+   "en": "Al-A‘rāf",
+   "meaning": "The Heights",
+   "revelation": "makki",
+   "ayahs": 206,
+   "basmalah": true,
+   "pages": [
+    151,
+    176
+   ]
+  },
+  {
+   "n": 8,
+   "ar": "الأنفَال",
+   "en": "Al-Anfāl",
+   "meaning": "The Spoils of War",
+   "revelation": "madani",
+   "ayahs": 75,
+   "basmalah": true,
+   "pages": [
+    177,
+    186
+   ]
+  },
+  {
+   "n": 9,
+   "ar": "التوبَة",
+   "en": "At-Taubah",
+   "meaning": "The Repentance",
+   "revelation": "madani",
+   "ayahs": 129,
+   "basmalah": false,
+   "pages": [
+    187,
+    207
+   ]
+  },
+  {
+   "n": 10,
+   "ar": "يُونس",
+   "en": "Yūnus",
+   "meaning": "Jonah",
+   "revelation": "makki",
+   "ayahs": 109,
+   "basmalah": true,
+   "pages": [
+    208,
+    221
+   ]
+  },
+  {
+   "n": 11,
+   "ar": "هُود",
+   "en": "Hūd",
+   "meaning": "Hud",
+   "revelation": "makki",
+   "ayahs": 123,
+   "basmalah": true,
+   "pages": [
+    221,
+    235
+   ]
+  },
+  {
+   "n": 12,
+   "ar": "يُوسُف",
+   "en": "Yūsuf",
+   "meaning": "Joseph",
+   "revelation": "makki",
+   "ayahs": 111,
+   "basmalah": true,
+   "pages": [
+    235,
+    248
+   ]
+  },
+  {
+   "n": 13,
+   "ar": "الرَّعد",
+   "en": "Ar-Ra‘d",
+   "meaning": "The Thunder",
+   "revelation": "madani",
+   "ayahs": 43,
+   "basmalah": true,
+   "pages": [
+    249,
+    255
+   ]
+  },
+  {
+   "n": 14,
+   "ar": "إبراهِيم",
+   "en": "Ibrāhīm",
+   "meaning": "Abraham",
+   "revelation": "makki",
+   "ayahs": 52,
+   "basmalah": true,
+   "pages": [
+    255,
+    261
+   ]
+  },
+  {
+   "n": 15,
+   "ar": "الحِجر",
+   "en": "Al-Ḥijr",
+   "meaning": "The Rocky Tract",
+   "revelation": "makki",
+   "ayahs": 99,
+   "basmalah": true,
+   "pages": [
+    262,
+    267
+   ]
+  },
+  {
+   "n": 16,
+   "ar": "النَّحل",
+   "en": "An-Naḥl",
+   "meaning": "The Bee",
+   "revelation": "makki",
+   "ayahs": 128,
+   "basmalah": true,
+   "pages": [
+    267,
+    281
+   ]
+  },
+  {
+   "n": 17,
+   "ar": "الإسرَاء",
+   "en": "Al-Isrā’",
+   "meaning": "The Night Journey",
+   "revelation": "makki",
+   "ayahs": 111,
+   "basmalah": true,
+   "pages": [
+    282,
+    293
+   ]
+  },
+  {
+   "n": 18,
+   "ar": "الكَهف",
+   "en": "Al-Kahf",
+   "meaning": "The Cave",
+   "revelation": "makki",
+   "ayahs": 110,
+   "basmalah": true,
+   "pages": [
+    293,
+    304
+   ]
+  },
+  {
+   "n": 19,
+   "ar": "مَريَم",
+   "en": "Maryam",
+   "meaning": "Mary",
+   "revelation": "makki",
+   "ayahs": 98,
+   "basmalah": true,
+   "pages": [
+    305,
+    312
+   ]
+  },
+  {
+   "n": 20,
+   "ar": "طه",
+   "en": "Ṭā-Hā",
+   "meaning": "Ta-Ha",
+   "revelation": "makki",
+   "ayahs": 135,
+   "basmalah": true,
+   "pages": [
+    312,
+    321
+   ]
+  },
+  {
+   "n": 21,
+   "ar": "الأنبيَاء",
+   "en": "Al-Anbiyā’",
+   "meaning": "The Prophets",
+   "revelation": "makki",
+   "ayahs": 112,
+   "basmalah": true,
+   "pages": [
+    322,
+    331
+   ]
+  },
+  {
+   "n": 22,
+   "ar": "الحج",
+   "en": "Al-Ḥajj",
+   "meaning": "The Pilgrimage",
+   "revelation": "makki",
+   "ayahs": 78,
+   "basmalah": true,
+   "pages": [
+    332,
+    341
+   ]
+  },
+  {
+   "n": 23,
+   "ar": "المؤمنُون",
+   "en": "Al-Mu’minūn",
+   "meaning": "The Believers",
+   "revelation": "makki",
+   "ayahs": 118,
+   "basmalah": true,
+   "pages": [
+    342,
+    349
+   ]
+  },
+  {
+   "n": 24,
+   "ar": "النور",
+   "en": "An-Nūr",
+   "meaning": "The Light",
+   "revelation": "madani",
+   "ayahs": 64,
+   "basmalah": true,
+   "pages": [
+    350,
+    359
+   ]
+  },
+  {
+   "n": 25,
+   "ar": "الفُرقَان",
+   "en": "Al-Furqān",
+   "meaning": "The Criterion",
+   "revelation": "makki",
+   "ayahs": 77,
+   "basmalah": true,
+   "pages": [
+    359,
+    366
+   ]
+  },
+  {
+   "n": 26,
+   "ar": "الشعراء",
+   "en": "Ash-Shu‘arā’",
+   "meaning": "The Poets",
+   "revelation": "makki",
+   "ayahs": 227,
+   "basmalah": true,
+   "pages": [
+    367,
+    376
+   ]
+  },
+  {
+   "n": 27,
+   "ar": "النَّمل",
+   "en": "An-Naml",
+   "meaning": "The Ant",
+   "revelation": "makki",
+   "ayahs": 93,
+   "basmalah": true,
+   "pages": [
+    377,
+    385
+   ]
+  },
+  {
+   "n": 28,
+   "ar": "القَصَص",
+   "en": "Al-Qaṣaṣ",
+   "meaning": "The Stories",
+   "revelation": "makki",
+   "ayahs": 88,
+   "basmalah": true,
+   "pages": [
+    385,
+    396
+   ]
+  },
+  {
+   "n": 29,
+   "ar": "العَنكبُوت",
+   "en": "Al-‘Ankabūt",
+   "meaning": "The Spider",
+   "revelation": "makki",
+   "ayahs": 69,
+   "basmalah": true,
+   "pages": [
+    396,
+    404
+   ]
+  },
+  {
+   "n": 30,
+   "ar": "الرُّوم",
+   "en": "Ar-Rūm",
+   "meaning": "The Romans",
+   "revelation": "makki",
+   "ayahs": 60,
+   "basmalah": true,
+   "pages": [
+    404,
+    410
+   ]
+  },
+  {
+   "n": 31,
+   "ar": "لُقمَان",
+   "en": "Luqmān",
+   "meaning": "Luqman",
+   "revelation": "makki",
+   "ayahs": 34,
+   "basmalah": true,
+   "pages": [
+    411,
+    414
+   ]
+  },
+  {
+   "n": 32,
+   "ar": "السَّجدة",
+   "en": "As-Sajdah",
+   "meaning": "The Prostration",
+   "revelation": "makki",
+   "ayahs": 30,
+   "basmalah": true,
+   "pages": [
+    415,
+    417
+   ]
+  },
+  {
+   "n": 33,
+   "ar": "الأحزَاب",
+   "en": "Al-Aḥzāb",
+   "meaning": "The Combined Forces",
+   "revelation": "madani",
+   "ayahs": 73,
+   "basmalah": true,
+   "pages": [
+    418,
+    427
+   ]
+  },
+  {
+   "n": 34,
+   "ar": "سَبإ",
+   "en": "Saba’",
+   "meaning": "Sheba",
+   "revelation": "makki",
+   "ayahs": 54,
+   "basmalah": true,
+   "pages": [
+    428,
+    434
+   ]
+  },
+  {
+   "n": 35,
+   "ar": "فَاطِر",
+   "en": "Fāṭir",
+   "meaning": "Originator",
+   "revelation": "makki",
+   "ayahs": 45,
+   "basmalah": true,
+   "pages": [
+    434,
+    440
+   ]
+  },
+  {
+   "n": 36,
+   "ar": "يسٓ",
+   "en": "Yā-Sīn",
+   "meaning": "Ya-Sin",
+   "revelation": "makki",
+   "ayahs": 83,
+   "basmalah": true,
+   "pages": [
+    440,
+    445
+   ]
+  },
+  {
+   "n": 37,
+   "ar": "الصَّافَات",
+   "en": "Aṣ-Ṣāffāt",
+   "meaning": "Those who set the Ranks",
+   "revelation": "makki",
+   "ayahs": 182,
+   "basmalah": true,
+   "pages": [
+    446,
+    452
+   ]
+  },
+  {
+   "n": 38,
+   "ar": "صٓ",
+   "en": "Ṣād",
+   "meaning": "The Letter Saad",
+   "revelation": "makki",
+   "ayahs": 88,
+   "basmalah": true,
+   "pages": [
+    453,
+    458
+   ]
+  },
+  {
+   "n": 39,
+   "ar": "الزُّمَر",
+   "en": "Az-Zumar",
+   "meaning": "The Troops",
+   "revelation": "makki",
+   "ayahs": 75,
+   "basmalah": true,
+   "pages": [
+    458,
+    467
+   ]
+  },
+  {
+   "n": 40,
+   "ar": "غَافِر",
+   "en": "Ghāfir",
+   "meaning": "The Forgiver",
+   "revelation": "makki",
+   "ayahs": 85,
+   "basmalah": true,
+   "pages": [
+    467,
+    476
+   ]
+  },
+  {
+   "n": 41,
+   "ar": "فُصِّلَت",
+   "en": "Fuṣṣilat",
+   "meaning": "Explained in Detail",
+   "revelation": "makki",
+   "ayahs": 54,
+   "basmalah": true,
+   "pages": [
+    477,
+    482
+   ]
+  },
+  {
+   "n": 42,
+   "ar": "الشُّوري",
+   "en": "Ash-Shūra",
+   "meaning": "The Consultation",
+   "revelation": "makki",
+   "ayahs": 53,
+   "basmalah": true,
+   "pages": [
+    483,
+    489
+   ]
+  },
+  {
+   "n": 43,
+   "ar": "الزُّخرُف",
+   "en": "Az-Zukhruf",
+   "meaning": "The Ornaments of Gold",
+   "revelation": "makki",
+   "ayahs": 89,
+   "basmalah": true,
+   "pages": [
+    489,
+    495
+   ]
+  },
+  {
+   "n": 44,
+   "ar": "الدُّخان",
+   "en": "Ad-Dukhān",
+   "meaning": "The Smoke",
+   "revelation": "makki",
+   "ayahs": 59,
+   "basmalah": true,
+   "pages": [
+    496,
+    498
+   ]
+  },
+  {
+   "n": 45,
+   "ar": "الجاثِية",
+   "en": "Al-Jāthiyah",
+   "meaning": "The Crouching",
+   "revelation": "makki",
+   "ayahs": 37,
+   "basmalah": true,
+   "pages": [
+    499,
+    502
+   ]
+  },
+  {
+   "n": 46,
+   "ar": "الأحقَاف",
+   "en": "Al-Aḥqāf",
+   "meaning": "The Wind-Curved Sandhills",
+   "revelation": "makki",
+   "ayahs": 35,
+   "basmalah": true,
+   "pages": [
+    502,
+    506
+   ]
+  },
+  {
+   "n": 47,
+   "ar": "مُحمد",
+   "en": "Muḥammad",
+   "meaning": "Muhammad",
+   "revelation": "madani",
+   "ayahs": 38,
+   "basmalah": true,
+   "pages": [
+    507,
+    510
+   ]
+  },
+  {
+   "n": 48,
+   "ar": "الفَتح",
+   "en": "Al-Fatḥ",
+   "meaning": "The Victory",
+   "revelation": "madani",
+   "ayahs": 29,
+   "basmalah": true,
+   "pages": [
+    511,
+    515
+   ]
+  },
+  {
+   "n": 49,
+   "ar": "الحُجُرَات",
+   "en": "Al-Ḥujurāt",
+   "meaning": "The Rooms",
+   "revelation": "madani",
+   "ayahs": 18,
+   "basmalah": true,
+   "pages": [
+    515,
+    517
+   ]
+  },
+  {
+   "n": 50,
+   "ar": "قٓ",
+   "en": "Qāf",
+   "meaning": "The Letter Qaf",
+   "revelation": "makki",
+   "ayahs": 45,
+   "basmalah": true,
+   "pages": [
+    518,
+    520
+   ]
+  },
+  {
+   "n": 51,
+   "ar": "الذَّاريَات",
+   "en": "Adh-Dhāriyāt",
+   "meaning": "The Winnowing Winds",
+   "revelation": "makki",
+   "ayahs": 60,
+   "basmalah": true,
+   "pages": [
+    520,
+    523
+   ]
+  },
+  {
+   "n": 52,
+   "ar": "الطُّور",
+   "en": "Aṭ-Ṭūr",
+   "meaning": "The Mount",
+   "revelation": "makki",
+   "ayahs": 49,
+   "basmalah": true,
+   "pages": [
+    523,
+    525
+   ]
+  },
+  {
+   "n": 53,
+   "ar": "النَّجم",
+   "en": "An-Najm",
+   "meaning": "The Star",
+   "revelation": "makki",
+   "ayahs": 62,
+   "basmalah": true,
+   "pages": [
+    526,
+    528
+   ]
+  },
+  {
+   "n": 54,
+   "ar": "القَمَر",
+   "en": "Al-Qamar",
+   "meaning": "The Moon",
+   "revelation": "makki",
+   "ayahs": 55,
+   "basmalah": true,
+   "pages": [
+    528,
+    531
+   ]
+  },
+  {
+   "n": 55,
+   "ar": "الرَّحمٰن",
+   "en": "Ar-Raḥmān",
+   "meaning": "The Beneficent",
+   "revelation": "makki",
+   "ayahs": 78,
+   "basmalah": true,
+   "pages": [
+    531,
+    534
+   ]
+  },
+  {
+   "n": 56,
+   "ar": "الوَاقِعة",
+   "en": "Al-Wāqi‘ah",
+   "meaning": "The Inevitable",
+   "revelation": "makki",
+   "ayahs": 96,
+   "basmalah": true,
+   "pages": [
+    534,
+    537
+   ]
+  },
+  {
+   "n": 57,
+   "ar": "الحدِيد",
+   "en": "Al-Ḥadīd",
+   "meaning": "The Iron",
+   "revelation": "madani",
+   "ayahs": 29,
+   "basmalah": true,
+   "pages": [
+    537,
+    541
+   ]
+  },
+  {
+   "n": 58,
+   "ar": "المُجَادلة",
+   "en": "Al-Mujādilah",
+   "meaning": "The Pleading Woman",
+   "revelation": "madani",
+   "ayahs": 22,
+   "basmalah": true,
+   "pages": [
+    542,
+    545
+   ]
+  },
+  {
+   "n": 59,
+   "ar": "الحَشر",
+   "en": "Al-Ḥashr",
+   "meaning": "The Exile",
+   "revelation": "madani",
+   "ayahs": 24,
+   "basmalah": true,
+   "pages": [
+    545,
+    548
+   ]
+  },
+  {
+   "n": 60,
+   "ar": "المُمتَحنَة",
+   "en": "Al-Mumtaḥanah",
+   "meaning": "She that is to be examined",
+   "revelation": "madani",
+   "ayahs": 13,
+   "basmalah": true,
+   "pages": [
+    549,
+    551
+   ]
+  },
+  {
+   "n": 61,
+   "ar": "الصَّف",
+   "en": "Aṣ-Ṣaff",
+   "meaning": "The Ranks",
+   "revelation": "madani",
+   "ayahs": 14,
+   "basmalah": true,
+   "pages": [
+    551,
+    552
+   ]
+  },
+  {
+   "n": 62,
+   "ar": "الجُمعَة",
+   "en": "Al-Jumu‘ah",
+   "meaning": "The Congregation, Friday",
+   "revelation": "madani",
+   "ayahs": 11,
+   "basmalah": true,
+   "pages": [
+    553,
+    554
+   ]
+  },
+  {
+   "n": 63,
+   "ar": "المُنَافِقُونَ",
+   "en": "Al-Munāfiqūn",
+   "meaning": "The Hypocrites",
+   "revelation": "madani",
+   "ayahs": 11,
+   "basmalah": true,
+   "pages": [
+    554,
+    555
+   ]
+  },
+  {
+   "n": 64,
+   "ar": "التغَابُن",
+   "en": "At-Taghābun",
+   "meaning": "The Mutual Disillusion",
+   "revelation": "madani",
+   "ayahs": 18,
+   "basmalah": true,
+   "pages": [
+    556,
+    557
+   ]
+  },
+  {
+   "n": 65,
+   "ar": "الطَّلَاق",
+   "en": "Aṭ-Ṭalāq",
+   "meaning": "The Divorce",
+   "revelation": "madani",
+   "ayahs": 12,
+   "basmalah": true,
+   "pages": [
+    558,
+    559
+   ]
+  },
+  {
+   "n": 66,
+   "ar": "التَّحرِيم",
+   "en": "At-Taḥrīm",
+   "meaning": "The Prohibition",
+   "revelation": "madani",
+   "ayahs": 12,
+   "basmalah": true,
+   "pages": [
+    560,
+    561
+   ]
+  },
+  {
+   "n": 67,
+   "ar": "المُلك",
+   "en": "Al-Mulk",
+   "meaning": "The Sovereignty",
+   "revelation": "makki",
+   "ayahs": 30,
+   "basmalah": true,
+   "pages": [
+    562,
+    564
+   ]
+  },
+  {
+   "n": 68,
+   "ar": "القَلَم",
+   "en": "Al-Qalam",
+   "meaning": "The Pen",
+   "revelation": "makki",
+   "ayahs": 52,
+   "basmalah": true,
+   "pages": [
+    564,
+    566
+   ]
+  },
+  {
+   "n": 69,
+   "ar": "الحَاقة",
+   "en": "Al-Ḥāqqah",
+   "meaning": "The Reality",
+   "revelation": "makki",
+   "ayahs": 52,
+   "basmalah": true,
+   "pages": [
+    566,
+    568
+   ]
+  },
+  {
+   "n": 70,
+   "ar": "المَعَارج",
+   "en": "Al-Ma‘ārij",
+   "meaning": "The Ascending Stairways",
+   "revelation": "makki",
+   "ayahs": 44,
+   "basmalah": true,
+   "pages": [
+    568,
+    570
+   ]
+  },
+  {
+   "n": 71,
+   "ar": "نُوح",
+   "en": "Nūḥ",
+   "meaning": "Noah",
+   "revelation": "makki",
+   "ayahs": 28,
+   "basmalah": true,
+   "pages": [
+    570,
+    571
+   ]
+  },
+  {
+   "n": 72,
+   "ar": "الجِن",
+   "en": "Al-Jinn",
+   "meaning": "The Jinn",
+   "revelation": "makki",
+   "ayahs": 28,
+   "basmalah": true,
+   "pages": [
+    572,
+    573
+   ]
+  },
+  {
+   "n": 73,
+   "ar": "المُزمل",
+   "en": "Al-Muzzammil",
+   "meaning": "The Enshrouded One",
+   "revelation": "makki",
+   "ayahs": 20,
+   "basmalah": true,
+   "pages": [
+    574,
+    575
+   ]
+  },
+  {
+   "n": 74,
+   "ar": "المُدثر",
+   "en": "Al-Muddaththir",
+   "meaning": "The Cloaked One",
+   "revelation": "makki",
+   "ayahs": 56,
+   "basmalah": true,
+   "pages": [
+    575,
+    577
+   ]
+  },
+  {
+   "n": 75,
+   "ar": "القِيَامة",
+   "en": "Al-Qiyāmah",
+   "meaning": "The Resurrection",
+   "revelation": "makki",
+   "ayahs": 40,
+   "basmalah": true,
+   "pages": [
+    577,
+    578
+   ]
+  },
+  {
+   "n": 76,
+   "ar": "الإنسَان",
+   "en": "Al-Insān",
+   "meaning": "The Man",
+   "revelation": "makki",
+   "ayahs": 31,
+   "basmalah": true,
+   "pages": [
+    578,
+    580
+   ]
+  },
+  {
+   "n": 77,
+   "ar": "المُرسَلات",
+   "en": "Al-Mursalāt",
+   "meaning": "The Emissaries",
+   "revelation": "makki",
+   "ayahs": 50,
+   "basmalah": true,
+   "pages": [
+    580,
+    581
+   ]
+  },
+  {
+   "n": 78,
+   "ar": "النَّبَإ",
+   "en": "An-Naba’",
+   "meaning": "The Tidings",
+   "revelation": "makki",
+   "ayahs": 40,
+   "basmalah": true,
+   "pages": [
+    582,
+    583
+   ]
+  },
+  {
+   "n": 79,
+   "ar": "النَّازعَات",
+   "en": "An-Nāzi‘āt",
+   "meaning": "Those who drag forth",
+   "revelation": "makki",
+   "ayahs": 46,
+   "basmalah": true,
+   "pages": [
+    583,
+    584
+   ]
+  },
+  {
+   "n": 80,
+   "ar": "عَبَسَ",
+   "en": "‘Abasa",
+   "meaning": "He Frowned",
+   "revelation": "makki",
+   "ayahs": 42,
+   "basmalah": true,
+   "pages": [
+    585,
+    586
+   ]
+  },
+  {
+   "n": 81,
+   "ar": "التَّكوير",
+   "en": "At-Takwīr",
+   "meaning": "The Overthrowing",
+   "revelation": "makki",
+   "ayahs": 29,
+   "basmalah": true,
+   "pages": [
+    586,
+    586
+   ]
+  },
+  {
+   "n": 82,
+   "ar": "الانفِطَار",
+   "en": "Al-Infiṭār",
+   "meaning": "The Cleaving",
+   "revelation": "makki",
+   "ayahs": 19,
+   "basmalah": true,
+   "pages": [
+    587,
+    587
+   ]
+  },
+  {
+   "n": 83,
+   "ar": "المُطَففين",
+   "en": "Al-Muṭaffifīn",
+   "meaning": "The Defrauding",
+   "revelation": "makki",
+   "ayahs": 36,
+   "basmalah": true,
+   "pages": [
+    587,
+    589
+   ]
+  },
+  {
+   "n": 84,
+   "ar": "الانشِقَاق",
+   "en": "Al-Inshiqāq",
+   "meaning": "The Sundering",
+   "revelation": "makki",
+   "ayahs": 25,
+   "basmalah": true,
+   "pages": [
+    589,
+    590
+   ]
+  },
+  {
+   "n": 85,
+   "ar": "البُرُوج",
+   "en": "Al-Burūj",
+   "meaning": "The Mansions of the Stars",
+   "revelation": "makki",
+   "ayahs": 22,
+   "basmalah": true,
+   "pages": [
+    590,
+    590
+   ]
+  },
+  {
+   "n": 86,
+   "ar": "الطَّارق",
+   "en": "Aṭ-Ṭāriq",
+   "meaning": "The Nightcomer",
+   "revelation": "makki",
+   "ayahs": 17,
+   "basmalah": true,
+   "pages": [
+    591,
+    591
+   ]
+  },
+  {
+   "n": 87,
+   "ar": "الأعلى",
+   "en": "Al-A‘lā",
+   "meaning": "The Most High",
+   "revelation": "makki",
+   "ayahs": 19,
+   "basmalah": true,
+   "pages": [
+    591,
+    592
+   ]
+  },
+  {
+   "n": 88,
+   "ar": "الغَاشِية",
+   "en": "Al-Ghāshiyah",
+   "meaning": "The Overwhelming",
+   "revelation": "makki",
+   "ayahs": 26,
+   "basmalah": true,
+   "pages": [
+    592,
+    593
+   ]
+  },
+  {
+   "n": 89,
+   "ar": "الفَجر",
+   "en": "Al-Fajr",
+   "meaning": "The Dawn",
+   "revelation": "makki",
+   "ayahs": 30,
+   "basmalah": true,
+   "pages": [
+    593,
+    594
+   ]
+  },
+  {
+   "n": 90,
+   "ar": "البَلَد",
+   "en": "Al-Balad",
+   "meaning": "The City",
+   "revelation": "makki",
+   "ayahs": 20,
+   "basmalah": true,
+   "pages": [
+    594,
+    595
+   ]
+  },
+  {
+   "n": 91,
+   "ar": "الشَّمس",
+   "en": "Ash-Shams",
+   "meaning": "The Sun",
+   "revelation": "makki",
+   "ayahs": 15,
+   "basmalah": true,
+   "pages": [
+    595,
+    595
+   ]
+  },
+  {
+   "n": 92,
+   "ar": "اللَّيل",
+   "en": "Al-Lail",
+   "meaning": "The Night",
+   "revelation": "makki",
+   "ayahs": 21,
+   "basmalah": true,
+   "pages": [
+    595,
+    596
+   ]
+  },
+  {
+   "n": 93,
+   "ar": "الضُّحى",
+   "en": "Aḍ-Ḍuḥā",
+   "meaning": "The Morning Hours",
+   "revelation": "makki",
+   "ayahs": 11,
+   "basmalah": true,
+   "pages": [
+    596,
+    596
+   ]
+  },
+  {
+   "n": 94,
+   "ar": "الشَّرح",
+   "en": "Ash-Sharḥ",
+   "meaning": "The Relief",
+   "revelation": "makki",
+   "ayahs": 8,
+   "basmalah": true,
+   "pages": [
+    596,
+    597
+   ]
+  },
+  {
+   "n": 95,
+   "ar": "التِّين",
+   "en": "At-Tīn",
+   "meaning": "The Fig",
+   "revelation": "makki",
+   "ayahs": 8,
+   "basmalah": true,
+   "pages": [
+    597,
+    597
+   ]
+  },
+  {
+   "n": 96,
+   "ar": "العَلَق",
+   "en": "Al-‘Alaq",
+   "meaning": "The Clot",
+   "revelation": "makki",
+   "ayahs": 19,
+   "basmalah": true,
+   "pages": [
+    597,
+    598
+   ]
+  },
+  {
+   "n": 97,
+   "ar": "القَدر",
+   "en": "Al-Qadr",
+   "meaning": "The Power",
+   "revelation": "makki",
+   "ayahs": 5,
+   "basmalah": true,
+   "pages": [
+    598,
+    598
+   ]
+  },
+  {
+   "n": 98,
+   "ar": "البَينَة",
+   "en": "Al-Bayyinah",
+   "meaning": "The Clear Proof",
+   "revelation": "madani",
+   "ayahs": 8,
+   "basmalah": true,
+   "pages": [
+    598,
+    599
+   ]
+  },
+  {
+   "n": 99,
+   "ar": "الزَّلزَلة",
+   "en": "Az-Zalzalah",
+   "meaning": "The Earthquake",
+   "revelation": "madani",
+   "ayahs": 8,
+   "basmalah": true,
+   "pages": [
+    599,
+    599
+   ]
+  },
+  {
+   "n": 100,
+   "ar": "العَاديَات",
+   "en": "Al-‘Ādiyāt",
+   "meaning": "The Courser",
+   "revelation": "makki",
+   "ayahs": 11,
+   "basmalah": true,
+   "pages": [
+    599,
+    600
+   ]
+  },
+  {
+   "n": 101,
+   "ar": "القَارعَة",
+   "en": "Al-Qāri‘ah",
+   "meaning": "The Calamity",
+   "revelation": "makki",
+   "ayahs": 11,
+   "basmalah": true,
+   "pages": [
+    600,
+    600
+   ]
+  },
+  {
+   "n": 102,
+   "ar": "التَّكاثُر",
+   "en": "At-Takāthur",
+   "meaning": "The Rivalry in World Increase",
+   "revelation": "makki",
+   "ayahs": 8,
+   "basmalah": true,
+   "pages": [
+    600,
+    600
+   ]
+  },
+  {
+   "n": 103,
+   "ar": "العَصر",
+   "en": "Al-‘Aṣr",
+   "meaning": "The Declining Day",
+   "revelation": "makki",
+   "ayahs": 3,
+   "basmalah": true,
+   "pages": [
+    601,
+    601
+   ]
+  },
+  {
+   "n": 104,
+   "ar": "الهُمَزة",
+   "en": "Al-Humazah",
+   "meaning": "The Traducer",
+   "revelation": "makki",
+   "ayahs": 9,
+   "basmalah": true,
+   "pages": [
+    601,
+    601
+   ]
+  },
+  {
+   "n": 105,
+   "ar": "الفِيل",
+   "en": "Al-Fīl",
+   "meaning": "The Elephant",
+   "revelation": "makki",
+   "ayahs": 5,
+   "basmalah": true,
+   "pages": [
+    601,
+    601
+   ]
+  },
+  {
+   "n": 106,
+   "ar": "قُرَيش",
+   "en": "Quraish",
+   "meaning": "Quraysh",
+   "revelation": "makki",
+   "ayahs": 4,
+   "basmalah": true,
+   "pages": [
+    602,
+    602
+   ]
+  },
+  {
+   "n": 107,
+   "ar": "المَاعُون",
+   "en": "Al-Mā‘ūn",
+   "meaning": "The Small Kindnesses",
+   "revelation": "makki",
+   "ayahs": 7,
+   "basmalah": true,
+   "pages": [
+    602,
+    602
+   ]
+  },
+  {
+   "n": 108,
+   "ar": "الكَوثر",
+   "en": "Al-Kauthar",
+   "meaning": "The Abundance",
+   "revelation": "makki",
+   "ayahs": 3,
+   "basmalah": true,
+   "pages": [
+    602,
+    602
+   ]
+  },
+  {
+   "n": 109,
+   "ar": "الكافِرون",
+   "en": "Al-Kāfirūn",
+   "meaning": "The Disbelievers",
+   "revelation": "makki",
+   "ayahs": 6,
+   "basmalah": true,
+   "pages": [
+    603,
+    603
+   ]
+  },
+  {
+   "n": 110,
+   "ar": "النَّصر",
+   "en": "An-Naṣr",
+   "meaning": "The Divine Support",
+   "revelation": "madani",
+   "ayahs": 3,
+   "basmalah": true,
+   "pages": [
+    603,
+    603
+   ]
+  },
+  {
+   "n": 111,
+   "ar": "المَسَد",
+   "en": "Al-Masad",
+   "meaning": "The Palm Fiber",
+   "revelation": "makki",
+   "ayahs": 5,
+   "basmalah": true,
+   "pages": [
+    603,
+    603
+   ]
+  },
+  {
+   "n": 112,
+   "ar": "الإخلَاص",
+   "en": "Al-Ikhlāṣ",
+   "meaning": "The Sincerity",
+   "revelation": "makki",
+   "ayahs": 4,
+   "basmalah": true,
+   "pages": [
+    604,
+    604
+   ]
+  },
+  {
+   "n": 113,
+   "ar": "الفَلَق",
+   "en": "Al-Falaq",
+   "meaning": "The Daybreak",
+   "revelation": "makki",
+   "ayahs": 5,
+   "basmalah": true,
+   "pages": [
+    604,
+    604
+   ]
+  },
+  {
+   "n": 114,
+   "ar": "النَّاس",
+   "en": "An-Nās",
+   "meaning": "Mankind",
+   "revelation": "makki",
+   "ayahs": 6,
+   "basmalah": true,
+   "pages": [
+    604,
+    604
+   ]
+  }
+ ],
+ "juzStarts": [
+  [
+   1,
+   1,
+   1
+  ],
+  [
+   2,
+   2,
+   142
+  ],
+  [
+   3,
+   2,
+   253
+  ],
+  [
+   4,
+   3,
+   92
+  ],
+  [
+   5,
+   4,
+   24
+  ],
+  [
+   6,
+   4,
+   148
+  ],
+  [
+   7,
+   5,
+   82
+  ],
+  [
+   8,
+   6,
+   111
+  ],
+  [
+   9,
+   7,
+   88
+  ],
+  [
+   10,
+   8,
+   41
+  ],
+  [
+   11,
+   9,
+   94
+  ],
+  [
+   12,
+   11,
+   6
+  ],
+  [
+   13,
+   12,
+   53
+  ],
+  [
+   14,
+   15,
+   1
+  ],
+  [
+   15,
+   17,
+   1
+  ],
+  [
+   16,
+   18,
+   75
+  ],
+  [
+   17,
+   21,
+   1
+  ],
+  [
+   18,
+   23,
+   1
+  ],
+  [
+   19,
+   25,
+   21
+  ],
+  [
+   20,
+   27,
+   56
+  ],
+  [
+   21,
+   29,
+   46
+  ],
+  [
+   22,
+   33,
+   31
+  ],
+  [
+   23,
+   36,
+   28
+  ],
+  [
+   24,
+   39,
+   32
+  ],
+  [
+   25,
+   41,
+   47
+  ],
+  [
+   26,
+   46,
+   1
+  ],
+  [
+   27,
+   51,
+   31
+  ],
+  [
+   28,
+   58,
+   1
+  ],
+  [
+   29,
+   67,
+   1
+  ],
+  [
+   30,
+   78,
+   1
+  ]
+ ],
+ "basmalah": "بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ",
+ "provenance": {
+  "text": {
+   "name": "KFGQPC Uthmanic Hafs v3.0 (King Fahd Glorious Quran Printing Complex)",
+   "via": "@quran.ws/text 0.1.0",
+   "license": "CC BY 4.0 (dataset packaging by quran.ws)",
+   "sourceSha256": "cdec7341b7c684e7b8dd469c4b68988914d2784e924c7e6cbb9cb4b57c24f013"
+  },
+  "tajweed": {
+   "name": "quran.ws tajweed corpus",
+   "via": "@quran.ws/tajwid-annotations 0.1.0 (corpus 0.4.2)",
+   "license": "CC BY 4.0",
+   "source": "https://tajweed.quranpedia.net",
+   "note": "Rule corpus derived from tajweed.quranpedia.net; some rules are marked by its authors as needing review."
+  },
+  "crossCheck": {
+   "name": "Tanzil Project Uthmani-minimal text",
+   "via": "@muslims-community/quran 1.1.0",
+   "license": "CC BY 3.0"
+  }
+ },
+ "verification": {
+  "dataSha256": "79ecf3e18ff3007b6a22836c47db940528618ae671543c064e04ee80bad5c654",
+  "tajweedSpans": 147234,
+  "tajweedSpansChecked": 39634,
+  "ayahsWithoutTajweed": [
+   "20:1",
+   "27:20"
+  ],
+  "tanzilSkeletonExact": 6236,
+  "tanzilSkeletonClose": 0
+ }
+}

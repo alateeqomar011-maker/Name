@@ -1,0 +1,14 @@
+# Python
+server/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# runtime data: database, private recordings, caches
+server/var/
+# downloaded model weights (see server/scripts/fetch_models.py)
+server/models/
+# web
+web/node_modules/
+web/dist/
+*.log
+.DS_Store

@@ -1,0 +1,454 @@
+[
+ {
+  "id": "idgham-bi-ghunnah-noon",
+  "ar": "إدغام النون بغنة",
+  "en": "Idghām with ghunnah (nūn)",
+  "group": "ghunnah",
+  "coach": "ghunnah",
+  "category": "idgham-bi-ghunnah"
+ },
+ {
+  "id": "idgham-bi-ghunnah-tanween",
+  "ar": "إدغام التنوين بغنة",
+  "en": "Idghām with ghunnah (tanwīn)",
+  "group": "ghunnah",
+  "coach": "ghunnah",
+  "category": "idgham-bi-ghunnah"
+ },
+ {
+  "id": "idgham-bila-ghunnah-noon",
+  "ar": "إدغام النون بغير غنة",
+  "en": "Idghām without ghunnah (nūn)",
+  "group": "idgham",
+  "coach": null,
+  "category": "idgham-bila-ghunnah"
+ },
+ {
+  "id": "idgham-bila-ghunnah-tanween",
+  "ar": "إدغام التنوين بغير غنة",
+  "en": "Idghām without ghunnah (tanwīn)",
+  "group": "idgham",
+  "coach": null,
+  "category": "idgham-bila-ghunnah"
+ },
+ {
+  "id": "idgham-kamil-noon",
+  "ar": "إدغام النون الكامل",
+  "en": "Complete idghām (nūn)",
+  "group": "idgham",
+  "coach": null,
+  "category": "idgham-kamil"
+ },
+ {
+  "id": "idgham-kamil-tanween",
+  "ar": "إدغام التنوين الكامل",
+  "en": "Complete idghām (tanwīn)",
+  "group": "idgham",
+  "coach": null,
+  "category": "idgham-kamil"
+ },
+ {
+  "id": "idgham-naqis-noon",
+  "ar": "إدغام النون الناقص",
+  "en": "Incomplete idghām (nūn)",
+  "group": "ghunnah",
+  "coach": null,
+  "category": "idgham-naqis"
+ },
+ {
+  "id": "idgham-naqis-tanween",
+  "ar": "إدغام التنوين الناقص",
+  "en": "Incomplete idghām (tanwīn)",
+  "group": "ghunnah",
+  "coach": null,
+  "category": "idgham-naqis"
+ },
+ {
+  "id": "idgham-shafawi-meem",
+  "ar": "إدغام الميم الساكنة",
+  "en": "Labial idghām (mīm)",
+  "group": "ghunnah",
+  "coach": "ghunnah",
+  "category": "idgham-shafawi"
+ },
+ {
+  "id": "ikhfa-ghunnah-tafkheem",
+  "ar": "غنة الإخفاء الحقيقي المفخمة",
+  "en": "Heavy (mufakhkham) ghunnah of ikhfāʾ",
+  "group": "none",
+  "coach": null,
+  "category": "ikhfa-ghunnah-quality"
+ },
+ {
+  "id": "ikhfa-ghunnah-tarqeeq",
+  "ar": "غنة الإخفاء الحقيقي المرققة",
+  "en": "Light (muraqqaq) ghunnah of ikhfāʾ",
+  "group": "none",
+  "coach": null,
+  "category": "ikhfa-ghunnah-quality"
+ },
+ {
+  "id": "ikhfa-haqiqi-noon",
+  "ar": "الإخفاء الحقيقي للنون",
+  "en": "Ikhfāʾ (hidden nūn with ghunnah)",
+  "group": "ikhfa",
+  "coach": "ghunnah",
+  "category": "ikhfa-haqiqi"
+ },
+ {
+  "id": "ikhfa-haqiqi-tanween",
+  "ar": "الإخفاء الحقيقي للتنوين",
+  "en": "Ikhfāʾ (hidden tanwīn with ghunnah)",
+  "group": "ikhfa",
+  "coach": "ghunnah",
+  "category": "ikhfa-haqiqi"
+ },
+ {
+  "id": "ikhfa-shafawi-meem",
+  "ar": "إخفاء الميم الساكنة",
+  "en": "Labial ikhfāʾ (mīm)",
+  "group": "ikhfa",
+  "coach": "ghunnah",
+  "category": "ikhfa-shafawi"
+ },
+ {
+  "id": "iqlab-noon",
+  "ar": "قلب النون الساكنة",
+  "en": "Iqlāb (nūn becomes mīm)",
+  "group": "iqlab",
+  "coach": "ghunnah",
+  "category": "iqlab"
+ },
+ {
+  "id": "iqlab-tanween",
+  "ar": "قلب التنوين",
+  "en": "Iqlāb (tanwīn becomes mīm)",
+  "group": "iqlab",
+  "coach": "ghunnah",
+  "category": "iqlab"
+ },
+ {
+  "id": "izhar-halqi-noon",
+  "ar": "إظهار النون",
+  "en": "Iẓhār ḥalqī of nūn (clear)",
+  "group": "izhar",
+  "coach": null,
+  "category": "izhar-halqi"
+ },
+ {
+  "id": "izhar-halqi-tanween",
+  "ar": "إظهار التنوين",
+  "en": "Iẓhār ḥalqī of tanwīn (clear)",
+  "group": "izhar",
+  "coach": null,
+  "category": "izhar-halqi"
+ },
+ {
+  "id": "izhar-mutlaq",
+  "ar": "الإظهار المطلق",
+  "en": "Absolute iẓhār",
+  "group": "izhar",
+  "coach": null,
+  "category": "izhar-mutlaq"
+ },
+ {
+  "id": "izhar-shafawi-meem",
+  "ar": "إظهار الميم الساكنة",
+  "en": "Labial iẓhār (mīm)",
+  "group": "none",
+  "coach": null,
+  "category": "izhar-shafawi"
+ },
+ {
+  "id": "leen-waw",
+  "ar": "الواو اللينة",
+  "en": "Līn letter wāw",
+  "group": "none",
+  "coach": null,
+  "category": "leen-letters"
+ },
+ {
+  "id": "leen-yaa",
+  "ar": "الياء اللينة",
+  "en": "Līn letter yāʾ",
+  "group": "none",
+  "coach": null,
+  "category": "leen-letters"
+ },
+ {
+  "id": "madd-badal",
+  "ar": "مد البدل وشبيهه",
+  "en": "Madd al-badal (2 counts)",
+  "group": "madd-2",
+  "coach": "madd",
+  "counts": [
+   2,
+   2
+  ],
+  "category": "madd-far-hamz"
+ },
+ {
+  "id": "madd-iwad",
+  "ar": "مد العوض",
+  "en": "Madd al-ʿiwaḍ (2 counts when stopping)",
+  "group": "madd-2",
+  "coach": null,
+  "counts": [
+   2,
+   2
+  ],
+  "category": "madd-tabee"
+ },
+ {
+  "id": "madd-lazim-harfi",
+  "ar": "المد اللازم الحرفي",
+  "en": "Necessary madd in disjoined letters (6 counts)",
+  "group": "madd-lazim",
+  "coach": null,
+  "counts": [
+   6,
+   6
+  ],
+  "category": "madd-lazim"
+ },
+ {
+  "id": "madd-lazim-kalimi-mukhaffaf",
+  "ar": "المد اللازم الكلمي المخفف",
+  "en": "Necessary madd, light (6 counts)",
+  "group": "madd-lazim",
+  "coach": "madd",
+  "counts": [
+   6,
+   6
+  ],
+  "category": "madd-lazim"
+ },
+ {
+  "id": "madd-lazim-kalimi-muthaqqal",
+  "ar": "المد اللازم الكلمي المثقل",
+  "en": "Necessary madd, heavy (6 counts)",
+  "group": "madd-lazim",
+  "coach": "madd",
+  "counts": [
+   6,
+   6
+  ],
+  "category": "madd-lazim"
+ },
+ {
+  "id": "madd-munfasil",
+  "ar": "المد الجائز المنفصل",
+  "en": "Permissible separated madd (4–5 counts)",
+  "group": "madd-jaiz",
+  "coach": "madd",
+  "counts": [
+   4,
+   5
+  ],
+  "category": "madd-far-hamz"
+ },
+ {
+  "id": "madd-muttasil",
+  "ar": "المد الواجب المتصل",
+  "en": "Obligatory connected madd (4–5 counts)",
+  "group": "madd-wajib",
+  "coach": "madd",
+  "counts": [
+   4,
+   5
+  ],
+  "category": "madd-far-hamz"
+ },
+ {
+  "id": "madd-silah-sughra",
+  "ar": "مد الصلة الصغرى",
+  "en": "Minor ṣilah (2 counts)",
+  "group": "madd-2",
+  "coach": null,
+  "counts": [
+   2,
+   2
+  ],
+  "category": "madd-tabee"
+ },
+ {
+  "id": "madd-tabee-kalimi",
+  "ar": "المد الطبيعي الكلمي",
+  "en": "Natural madd (2 counts)",
+  "group": "madd-2",
+  "coach": "madd",
+  "counts": [
+   2,
+   2
+  ],
+  "category": "madd-tabee"
+ },
+ {
+  "id": "meem-mushaddadah",
+  "ar": "الميم المشددة",
+  "en": "Mīm with shaddah (ghunnah, 2 counts)",
+  "group": "ghunnah",
+  "coach": "ghunnah",
+  "category": "mushaddadatan"
+ },
+ {
+  "id": "mutajanisain-idgham-naqis",
+  "ar": "الإدغام الناقص",
+  "en": "Incomplete idghām of related letters",
+  "group": "none",
+  "coach": null,
+  "category": "mutajanisain-sagheer"
+ },
+ {
+  "id": "mutajanisain-ikhfa-shafawi",
+  "ar": "الاخفاء الشفوي",
+  "en": "Labial ikhfāʾ of related letters",
+  "group": "none",
+  "coach": null,
+  "category": "mutajanisain-sagheer"
+ },
+ {
+  "id": "mutamathilain-idgham-kamil",
+  "ar": "الإدغام الكامل",
+  "en": "Idghām of identical letters",
+  "group": "none",
+  "coach": null,
+  "category": "mutamathilain-sagheer"
+ },
+ {
+  "id": "mutamathilain-izhar",
+  "ar": "الإظهار",
+  "en": "Iẓhār of identical letters",
+  "group": "none",
+  "coach": null,
+  "category": "mutamathilain-sagheer"
+ },
+ {
+  "id": "noon-mushaddadah",
+  "ar": "النون المشددة",
+  "en": "Nūn with shaddah (ghunnah, 2 counts)",
+  "group": "ghunnah",
+  "coach": "ghunnah",
+  "category": "mushaddadatan"
+ },
+ {
+  "id": "qalqalah-kubra",
+  "ar": "القلقلة الكبرى",
+  "en": "Major qalqalah (stopping at the ayah end)",
+  "group": "qalqalah",
+  "coach": "qalqalah",
+  "category": "qalqalah-ranks"
+ },
+ {
+  "id": "qalqalah-mutatarrifa",
+  "ar": "القلقلة المتطرفة",
+  "en": "Qalqalah at a word's end",
+  "group": "qalqalah",
+  "coach": null,
+  "category": "qalqalah-ranks"
+ },
+ {
+  "id": "qalqalah-sughra",
+  "ar": "القلقلة الصغرى",
+  "en": "Minor qalqalah",
+  "group": "qalqalah",
+  "coach": "qalqalah",
+  "category": "qalqalah-ranks"
+ },
+ {
+  "id": "raa-either-permissible",
+  "ar": "جواز ترقيق وتفخيم الراء",
+  "en": "Rāʾ: heavy or light both permitted",
+  "group": "none",
+  "coach": null,
+  "category": "raa-rules"
+ },
+ {
+  "id": "raa-tafkheem",
+  "ar": "تفخيم الراء",
+  "en": "Heavy rāʾ (tafkhīm)",
+  "group": "tafkheem",
+  "coach": null,
+  "category": "raa-rules"
+ },
+ {
+  "id": "raa-tarqeeq",
+  "ar": "ترقيق الراء",
+  "en": "Light rāʾ (tarqīq)",
+  "group": "none",
+  "coach": null,
+  "category": "raa-rules"
+ },
+ {
+  "id": "seven-alefs",
+  "ar": "الألفات السبع",
+  "en": "The seven alifs (read short when continuing)",
+  "group": "silent",
+  "coach": null,
+  "category": "madd-tabee"
+ },
+ {
+  "id": "seven-alefs-khulf",
+  "ar": "الألفات السبع بخلف",
+  "en": "The seven alifs (difference of opinion)",
+  "group": "silent",
+  "coach": null,
+  "category": "madd-tabee"
+ },
+ {
+  "id": "tafkheem-rank-1-jazari",
+  "ar": "مرتبة التفخيم الأولى (ابن الجزري)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-1-tahhan",
+  "ar": "مرتبة التفخيم الأولى (ابن الطحان الأندلسي)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-2-tahhan",
+  "ar": "مرتبة التفخيم الثانية (ابن الطحان الأندلسي)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-3-jazari",
+  "ar": "مرتبة التفخيم الثالثة (ابن الجزري)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-3-relative-tahhan",
+  "ar": "مرتبة التفخيم الثالثة -التفخيم النسبي (ابن الطحان الأندلسي)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-4-jazari",
+  "ar": "مرتبة التفخيم الرابعة (ابن الجزري)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ },
+ {
+  "id": "tafkheem-rank-5-relative-jazari",
+  "ar": "مرتبة التفخيم الخامسة - التفخيم النسبي (ابن الجزري)",
+  "en": "Rank of tafkhīm (heavy letter)",
+  "group": "none",
+  "coach": null,
+  "category": "tafkheem-ranks"
+ }
+]
