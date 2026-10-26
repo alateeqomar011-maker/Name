@@ -34,6 +34,15 @@ def test_decode_any_format_and_limits():
         io.decode(b"not audio at all", sr=16000)
 
 
+def test_playlist_input_is_rejected():
+    # an "audio" upload that is really an HLS playlist pointing at a local file must not be followed
+    playlist = b"#EXTM3U\n#EXT-X-TARGETDURATION:10\n#EXTINF:10,\nfile:///etc/hostname\n#EXT-X-ENDLIST\n"
+    with pytest.raises(io.AudioError):
+        io.probe(playlist)
+    with pytest.raises(io.AudioError):
+        io.decode(playlist)
+
+
 def test_loudness_normalisation(a):
     out = io.loudness_normalize(a * 0.05, SR, -18)
     assert abs(io.loudness_lufs(out, SR) - (-18)) < 0.6

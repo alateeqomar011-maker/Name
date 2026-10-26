@@ -44,18 +44,26 @@ def fetch(url: str) -> bytes:
         if path.is_file():
             return path.read_bytes()
         try:
-            with httpx.Client(timeout=settings.http_timeout, follow_redirects=True,
+            with httpx.Client(timeout=settings.http_timeout, follow_redirects=False,
                               headers={"User-Agent": "Murattil/0.1 (Quran recitation practice)"}) as c:
-                with c.stream("GET", url) as r:
-                    if r.status_code != 200:
-                        raise ReferenceUnavailable(f"The reference audio source answered HTTP {r.status_code}.")
-                    if not reciters.allowed_reference_url(str(r.url)):
-                        raise ReferenceUnavailable("Reference audio redirected to a host that is not allowed.")
-                    buf = bytearray()
-                    for chunk in r.iter_bytes():
-                        buf += chunk
-                        if len(buf) > MAX_BYTES:
-                            raise ReferenceUnavailable("Reference audio file is unexpectedly large.")
+                target = url
+                for _ in range(4):  # follow redirects by hand so every hop is checked against the allow-list
+                    with c.stream("GET", target) as r:
+                        if r.is_redirect:
+                            target = str(r.url.join(r.headers.get("location", "")))
+                            if not reciters.allowed_reference_url(target):
+                                raise ReferenceUnavailable("Reference audio redirected to a host that is not allowed.")
+                            continue
+                        if r.status_code != 200:
+                            raise ReferenceUnavailable(f"The reference audio source answered HTTP {r.status_code}.")
+                        buf = bytearray()
+                        for chunk in r.iter_bytes():
+                            buf += chunk
+                            if len(buf) > MAX_BYTES:
+                                raise ReferenceUnavailable("Reference audio file is unexpectedly large.")
+                        break
+                else:
+                    raise ReferenceUnavailable("Too many redirects from the reference audio source.")
         except httpx.HTTPError as e:
             raise ReferenceUnavailable("The reference audio source could not be reached.") from e
         tmp = path.with_suffix(".tmp")

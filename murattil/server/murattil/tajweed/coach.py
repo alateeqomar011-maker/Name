@@ -390,8 +390,8 @@ def _summary(words, findings, quality, performed, unit, unit_basis) -> dict:
         head_en = f"{len(errors)} likely mistake{'s' if len(errors) != 1 else ''} to review."
         head_ar = f"{len(errors)} خطأ محتمل يحتاج إلى مراجعة."
     elif warns:
-        head_en = "No clear word mistakes found; a few words were unclear."
-        head_ar = "لم تُرصد أخطاء واضحة في الكلمات، وبعض الكلمات لم تكن واضحة."
+        head_en = f"No clear word mistakes found; {len(warns)} point{'s' if len(warns) != 1 else ''} worth checking."
+        head_ar = f"لم تُرصد أخطاء واضحة في الكلمات، وهناك {len(warns)} ملاحظة تستحق المراجعة."
     else:
         head_en = "No mistakes were detected by the automated checks."
         head_ar = "لم تكشف الفحوص الآلية عن أخطاء."

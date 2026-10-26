@@ -18,7 +18,7 @@ def probe(data: bytes, timeout: float = 30) -> dict:
     """Return {duration, codec, sample_rate, channels} for an audio blob, or raise AudioError."""
     try:
         proc = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
+            ["ffprobe", "-v", "error", "-protocol_whitelist", "pipe", "-select_streams", "a:0", "-show_entries",
              "stream=codec_name,sample_rate,channels:format=duration,format_name", "-of", "json", "pipe:0"],
             input=data, capture_output=True, timeout=timeout,
         )
@@ -43,7 +43,9 @@ def probe(data: bytes, timeout: float = 30) -> dict:
 
 def decode(data: bytes, sr: int = 16000, max_seconds: float | None = None, timeout: float = 120) -> np.ndarray:
     """Decode any audio blob to mono float32 at `sr`. Raises AudioError on bad input."""
-    args = ["ffmpeg", "-nostdin", "-v", "error", "-i", "pipe:0"]
+    # Only the pipe protocol is allowed: an uploaded "audio" file that is really a playlist (HLS, concat,
+    # etc.) must not be able to make ffmpeg read local files or fetch URLs.
+    args = ["ffmpeg", "-nostdin", "-v", "error", "-protocol_whitelist", "pipe", "-i", "pipe:0"]
     if max_seconds is not None:
         # decode slightly more than allowed so we can tell the user it was too long
         args += ["-t", f"{max_seconds + 1:.3f}"]

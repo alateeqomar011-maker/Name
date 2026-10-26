@@ -54,11 +54,17 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
        "connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 
 
+MAX_BODY = max(p.max_upload_mb for p in PLANS.values()) * 1024 * 1024 + 1024 * 1024
+
+
 @app.middleware("http")
 async def security(request: Request, call_next):
     if request.url.path.startswith("/api/") and request.method in STATE_CHANGING:
         if request.headers.get(CSRF_HEADER) != CSRF_VALUE:
             return JSONResponse({"detail": "Missing request header."}, status_code=403)
+        length = request.headers.get("content-length")
+        if length and length.isdigit() and int(length) > MAX_BODY:
+            return JSONResponse({"detail": "The upload is too large."}, status_code=413)
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "same-origin")

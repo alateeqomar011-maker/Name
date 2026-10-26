@@ -41,6 +41,11 @@ class _RefHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         folder, fname = parts[1], parts[2]
+        if folder.startswith("Redirect"):
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data/")
+            self.end_headers()
+            return
         if folder.startswith("Missing"):
             self.send_response(404)
             self.end_headers()

@@ -177,6 +177,21 @@ def test_bookmarks():
     assert c.delete("/api/bookmarks/2/255", headers=H).json()["bookmarks"] == []
 
 
-@pytest.mark.parametrize("path", ["/api/nope", "/api/recordings/../../etc/passwd"])
-def test_unknown_api_paths(path):
-    assert TestClient(app).get(path).status_code in (401, 404)
+def test_unknown_api_path():
+    assert TestClient(app).get("/api/nope").status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/api/recordings/../../etc/passwd", "/%2e%2e/%2e%2e/etc/passwd",
+                                  "/assets/..%2f..%2f..%2f..%2fetc%2fpasswd", "/..%5c..%5cetc%5cpasswd"])
+def test_path_traversal_never_serves_outside_files(path):
+    r = TestClient(app).get(path)
+    assert "root:" not in r.text
+    assert r.status_code in (200, 401, 404)  # 200 only ever means the app's own index.html
+    if r.status_code == 200:
+        assert r.text.lstrip().lower().startswith("<!doctype html")
+
+
+def test_oversized_upload_rejected_before_reading():
+    c = client()
+    r = c.post("/api/recordings", headers={**H, "Content-Length": str(500 * 1024 * 1024)}, content=b"x")
+    assert r.status_code == 413

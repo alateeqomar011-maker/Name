@@ -125,3 +125,9 @@ def test_registry_loads_only_consented_models(tmp_path, monkeypatch):
     (bad / "consent.pdf").write_bytes(b"altered")
     ids = [m.id for m in registry.load_all()]
     assert ids == ["good"]
+
+
+def test_reference_redirect_to_disallowed_host_is_refused(fake_reference):
+    from murattil import reciters, reference
+    with pytest.raises(reference.ReferenceUnavailable, match="not allowed"):
+        reference.fetch(reciters.EVERYAYAH.format(folder="Redirect_test", s=1, a=1))
