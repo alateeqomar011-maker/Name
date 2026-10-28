@@ -94,6 +94,9 @@ class Settings:
     admin_token: str | None = field(default_factory=lambda: os.environ.get("MURATTIL_ADMIN_TOKEN") or None)
     # Load the speech-recognition model in the background at startup.
     warm_up: bool = field(default_factory=lambda: _env_bool("MURATTIL_WARM_UP", True))
+    # Allow the app to be shown inside another site's frame (e.g. a Hugging Face Space page). The
+    # session cookie then has to be a partitioned SameSite=None cookie.
+    frame_ancestors: str | None = field(default_factory=lambda: os.environ.get("MURATTIL_FRAME_ANCESTORS") or None)
 
     @property
     def db_path(self) -> Path:

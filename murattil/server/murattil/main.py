@@ -65,6 +65,8 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
        "font-src 'self' data:; media-src 'self' blob: https://everyayah.com https://*.mp3quran.net; "
        "connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+if settings.frame_ancestors:
+    CSP = CSP.replace("frame-ancestors 'none'", f"frame-ancestors {settings.frame_ancestors}")
 
 
 MAX_BODY = max(p.max_upload_mb for p in PLANS.values()) * 1024 * 1024 + 1024 * 1024

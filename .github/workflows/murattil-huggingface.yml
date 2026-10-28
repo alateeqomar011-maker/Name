@@ -1,0 +1,54 @@
+# Deploys murattil/ to a Hugging Face Space (Docker), which gives the app a public https link.
+#
+# One-time setup:
+#   1. Create a Hugging Face account and an access token with "write" permission
+#      (https://huggingface.co/settings/tokens).
+#   2. In this GitHub repository: Settings → Secrets and variables → Actions → New repository
+#      secret: HF_TOKEN = the token.
+#   3. Actions → "Deploy Murattil to Hugging Face" → Run workflow, entering the Space name
+#      (e.g. your-username/murattil). The Space is created if it does not exist.
+# The Space builds the Docker image (about 15–25 minutes the first time, including the model
+# weights) and then serves the app at https://<your-username>-murattil.hf.space
+name: Deploy Murattil to Hugging Face
+
+on:
+  workflow_dispatch:
+    inputs:
+      space:
+        description: "Space id, e.g. your-username/murattil (free CPU Basic hardware is enough)"
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE: ${{ inputs.space }}
+        run: |
+          test -n "$HF_TOKEN" || { echo "Add the HF_TOKEN repository secret first (see the comments at the top of this file)."; exit 1; }
+          pip install --quiet "huggingface_hub>=0.30"
+          # the Space gets the app folder, with the Space card as its README
+          rsync -a --exclude server/.venv --exclude server/var --exclude server/models --exclude web/node_modules \
+            --exclude web/dist --exclude '__pycache__' --exclude docs murattil/ /tmp/space/
+          cp murattil/deploy/huggingface/README.md /tmp/space/README.md
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["SPACE"]
+          api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+          # the Space page shows the app in a frame; allow that frame (and its session cookie)
+          api.add_space_variable(space, "MURATTIL_FRAME_ANCESTORS", "https://huggingface.co")
+          api.upload_folder(repo_id=space, repo_type="space", folder_path="/tmp/space",
+                            commit_message=f"Deploy {os.environ.get('GITHUB_SHA', '')[:7]}")
+          user, name = space.split("/", 1)
+          host = f"{user}-{name}".lower().replace("_", "-").replace(".", "-")
+          print(f"Deployed. The Space is building; the app will be at https://{host}.hf.space "
+                f"(page: https://huggingface.co/spaces/{space})")
+          PY

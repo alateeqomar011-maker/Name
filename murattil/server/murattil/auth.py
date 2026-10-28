@@ -52,20 +52,32 @@ def create_user() -> str:
     return uid
 
 
+def _partitioned_cookie(response: Response, value: str, max_age: int) -> None:
+    # written by hand: Starlette only emits the Partitioned attribute on Python 3.14+
+    response.headers.append("set-cookie", f"{COOKIE}={value}; Max-Age={max_age}; Path=/; HttpOnly; Secure; "
+                                          "SameSite=None; Partitioned")
+
+
 def create_session(user_id: str, response: Response) -> None:
     tok = secrets.token_urlsafe(32)
     t = db.now()
     db.run("INSERT INTO sessions(token_hash, user_id, created_at, expires_at, last_seen) VALUES (?,?,?,?,?)",
            _hash_token(tok), user_id, t, t + SESSION_DAYS * 86400, t)
-    response.set_cookie(COOKIE, tok, max_age=SESSION_DAYS * 86400, httponly=True, samesite="lax",
-                        secure=settings.secure_cookies, path="/")
+    if settings.frame_ancestors:  # shown inside another site's frame: a partitioned third-party cookie
+        _partitioned_cookie(response, tok, SESSION_DAYS * 86400)
+    else:
+        response.set_cookie(COOKIE, tok, max_age=SESSION_DAYS * 86400, httponly=True, samesite="lax",
+                            secure=settings.secure_cookies, path="/")
 
 
 def end_session(request: Request, response: Response) -> None:
     tok = request.cookies.get(COOKIE)
     if tok:
         db.run("DELETE FROM sessions WHERE token_hash = ?", _hash_token(tok))
-    response.delete_cookie(COOKIE, path="/")
+    if settings.frame_ancestors:  # a partitioned cookie is only removed with the same attributes
+        _partitioned_cookie(response, "", 0)
+    else:
+        response.delete_cookie(COOKIE, path="/")
 
 
 def user_from_request(request: Request) -> dict | None:

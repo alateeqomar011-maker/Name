@@ -195,3 +195,14 @@ def test_oversized_upload_rejected_before_reading():
     c = client()
     r = c.post("/api/recordings", headers={**H, "Content-Length": str(500 * 1024 * 1024)}, content=b"x")
     assert r.status_code == 413
+
+
+def test_embeddable_mode_uses_partitioned_cookie():
+    from murattil.config import settings
+    object.__setattr__(settings, "frame_ancestors", "https://huggingface.co")
+    try:
+        r = TestClient(app).get("/api/session")
+        cookie = r.headers["set-cookie"].lower()
+        assert "samesite=none" in cookie and "secure" in cookie and "partitioned" in cookie
+    finally:
+        object.__setattr__(settings, "frame_ancestors", None)

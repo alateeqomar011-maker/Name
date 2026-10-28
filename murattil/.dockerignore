@@ -1,0 +1,9 @@
+server/.venv
+server/var
+server/models
+server/.pytest_cache
+web/node_modules
+web/dist
+**/__pycache__
+docs
+deploy
