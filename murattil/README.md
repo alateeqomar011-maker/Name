@@ -89,10 +89,7 @@ against itself:
 | Slowed to 0.8× | measured pace ratio 0.79–0.86 |
 | Pitch raised 3 semitones | melody similarity 91–97 % (melody is compared relative to each voice's own pitch); pace unchanged |
 
-It was also run on 48 pairs of a crowd-sourced reciter and a professional reciting the same ayah.
-For example, one crowd-sourced reciter was measured 2.4× faster than Husary, and another took
-mid-ayah breaths after «لَآ» and «مَا» where the reciter does not. Scores measure closeness to that
-recording, not correctness.
+It was also run on 48 pairs of a crowd-sourced reciter and a professional reciting the same ayah. 44 were compared; 4 could not be matched word by word and were reported as such rather than scored. Examples of what it found: learners held the 6-count madd of «ٱلضَّآلِّينَ» for 0.1–0.5 s where Alafasy holds it 2.5 s; one reciter was 2.4× faster than Husary; another took mid-ayah breaths after «لَآ» and «مَا» where the reciter does not. Scores measure closeness to that recording, not correctness.
 
 ### Other measurements
 
