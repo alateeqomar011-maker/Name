@@ -104,6 +104,62 @@ class CtcModel:
         frame_s = (n_in / SR) / max(lp.shape[0], 1)
         return Recognition(logp=lp, frame_s=frame_s, blank=self.blank)
 
+    def recognize_long(self, wav16k: np.ndarray, chunk_s: float = 30.0, overlap_s: float = 4.0) -> Recognition:
+        """Recognise audio of any length in overlapping chunks (attention memory grows with the
+        square of the length). Each output frame is taken from the chunk where it lies furthest
+        from a chunk edge."""
+        n = wav16k.size
+        if n <= (chunk_s + overlap_s) * SR:
+            return self.recognize(wav16k)
+        hop = int((chunk_s - overlap_s) * SR)
+        size = int(chunk_s * SR)
+        first = self.recognize(wav16k[:size])
+        frame_s = first.frame_s
+        total = int(np.ceil(n / SR / frame_s)) + 2
+        out = np.full((total, first.logp.shape[1]), np.nan, dtype=np.float32)
+        dist = np.full(total, -1.0)
+        start = 0
+        rec = first
+        while True:
+            m = rec.logp.shape[0]
+            g0 = int(round(start / SR / frame_s))
+            for i in range(m):
+                g = g0 + i
+                if g >= total:
+                    break
+                # distance to the nearest *artificial* chunk edge (the recording's own start and end are not)
+                lead = i if start > 0 else 10 ** 6
+                tail = (m - 1 - i) if start + size < n else 10 ** 6
+                d = min(lead, tail)
+                if d > dist[g]:
+                    dist[g] = d
+                    out[g] = rec.logp[i]
+            if start + size >= n:
+                break
+            start += hop
+            rec = self.recognize(wav16k[start:start + size])
+        valid = ~np.isnan(out[:, 0])
+        last = int(np.flatnonzero(valid)[-1]) + 1 if valid.any() else 0
+        lp = out[:last]
+        lp[np.isnan(lp[:, 0])] = np.log(np.full(lp.shape[1], 1e-6) + np.eye(1, lp.shape[1], self.blank)[0])
+        return Recognition(logp=lp, frame_s=frame_s, blank=self.blank)
+
+    def words_with_times(self, rec: Recognition) -> list[dict]:
+        """Greedy transcript as words with start/end times (seconds)."""
+        from .ctc import greedy
+        out: list[dict] = []
+        for tid, a, b in greedy(rec.logp, rec.blank):
+            piece = self.vocab.get(tid, "")
+            if piece in ("<unk>", "<blank>"):
+                continue
+            if piece.startswith(WORD) or not out:
+                out.append({"raw": "", "start": a * rec.frame_s, "end": (b + 1) * rec.frame_s})
+            out[-1]["raw"] += piece
+            out[-1]["end"] = (b + 1) * rec.frame_s
+        for w in out:
+            w["text"] = normalize(w["raw"].replace(WORD, " "))
+        return [w for w in out if w["text"]]
+
     # -------------------------------------------------------------- text <-> tokens
 
     def decode_text(self, ids: list[int]) -> str:

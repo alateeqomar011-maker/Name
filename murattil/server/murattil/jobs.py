@@ -17,7 +17,7 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
-QUOTA_KIND = {"transform": "transform", "tajweed": "analysis", "compare": "analysis"}
+QUOTA_KIND = {"transform": "transform", "tajweed": "analysis", "compare": "analysis", "segment": None}
 MAX_ACTIVE_PER_USER = 2
 
 
@@ -134,7 +134,7 @@ def _run_one(job: dict) -> None:
 
 
 def _refund(job: dict) -> None:
-    if job.get("quota_day"):
+    if job.get("quota_day") and QUOTA_KIND.get(job["kind"]):
         quotas.refund(job["user_id"], QUOTA_KIND[job["kind"]], job["quota_day"])
 
 

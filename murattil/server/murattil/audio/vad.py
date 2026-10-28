@@ -79,14 +79,50 @@ def speech_segments(y: np.ndarray, sr: int = 16000, min_silence: float = 0.25) -
 
 def trim(y: np.ndarray, sr: int, pad: float = 0.15) -> tuple[np.ndarray, float]:
     """Trim leading/trailing non-speech. Returns (trimmed, offset_seconds)."""
-    segs = speech_segments(y if sr == 16000 else _to16k(y, sr), 16000)
+    y16 = y if sr == 16000 else _to16k(y, sr)
+    segs = speech_segments(y16, 16000)
     if not segs:
         return y, 0.0
-    a = max(0.0, segs[0][0] - pad)
-    b = min(y.size / sr, segs[-1][1] + pad)
+    a0, b0 = segs[0][0], segs[-1][1]
+    # Silero can score a long held vowel (a 4–6 count madd at the end of an ayah) as non-speech;
+    # never cut into sound that is continuous with the detected speech
+    for e0, e1 in energy_segments(y16, 16000, min_silence=0.3):
+        if e0 < a0 <= e1 + 0.3:
+            a0 = e0
+        if e0 - 0.3 <= b0 < e1:
+            b0 = e1
+    a = max(0.0, a0 - pad)
+    b = min(y.size / sr, b0 + pad)
     return y[int(a * sr):int(b * sr)], a
 
 
 def _to16k(y: np.ndarray, sr: int) -> np.ndarray:
     from .io import resample
     return resample(y, sr, 16000)
+
+
+def _complement(segs: list[tuple[float, float]], dur: float) -> list[tuple[float, float]]:
+    out, t = [], 0.0
+    for a, b in segs:
+        if a > t:
+            out.append((t, a))
+        t = max(t, b)
+    if t < dur:
+        out.append((t, dur))
+    return out
+
+
+def pauses(y: np.ndarray, sr: int = 16000, min_pause: float = 0.3) -> list[tuple[float, float]]:
+    """[(start_s, end_s)] of pauses: stretches that both the neural VAD and the energy detector hear
+    as silent. Silero alone can call a fricative or a long held vowel "silence"; energy alone counts
+    room reverb as sound."""
+    dur = y.size / sr
+    a = _complement(speech_segments(y, sr, min_silence=0.1), dur)
+    b = _complement(energy_segments(y, sr, min_speech=0.08, min_silence=0.1), dur)
+    out = []
+    for a0, a1 in a:
+        for b0, b1 in b:
+            lo, hi = max(a0, b0), min(a1, b1)
+            if hi - lo >= min_pause:
+                out.append((lo, hi))
+    return out

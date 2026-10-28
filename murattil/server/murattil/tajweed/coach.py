@@ -20,7 +20,7 @@ import numpy as np
 
 from .. import quran
 from ..audio.io import AudioError, decode, loudness_lufs
-from ..audio.vad import speech_segments, trim
+from ..audio.vad import pauses, speech_segments, trim
 from . import asr, checks, content
 from .ctc import char_similarity, edit_ops, forced_align, forced_frame_logps, greedy, segment_gop
 
@@ -72,6 +72,64 @@ def word_cost(expected: str, heard: str) -> float:
     if _loose(expected) == _loose(heard):
         return 0.05
     return 1.0 - char_similarity(expected, heard)
+
+
+def _dedup(w: str) -> str:
+    """Collapse an immediately repeated piece (عليكمكم → عليكم). On a long held vowel the recogniser
+    often writes the same syllable twice; measured on professional recitations this is the most
+    common way a correctly recited word gets transcribed differently."""
+    for n in (4, 3, 2, 1):
+        i = 0
+        while i + 2 * n <= len(w):
+            if w[i:i + n] == w[i + n:i + 2 * n]:
+                w = w[:i + n] + w[i + 2 * n:]
+            else:
+                i += 1
+    return w
+
+
+def match_cost(expected: str, heard: str) -> float:
+    """word_cost that forgives the recogniser's repeated syllables."""
+    c = word_cost(expected, heard)
+    if c <= 0.05:
+        return c
+    return min(c, word_cost(expected, _dedup(heard)), word_cost(_dedup(expected), _dedup(heard)))
+
+
+def refine_ops(ops: list[tuple], expected: list[str], hyp: list[str]) -> list[tuple]:
+    """Edit operations as (op, ref_index, hyp_indices, cost), with a word the recogniser split in
+    two (العظيم → الع ظيم) or two words it wrote as one merged back where that matches better."""
+    out = [(op, ri, () if hi is None else (hi,), match_cost(expected[ri], hyp[hi]) if ri is not None and hi is not None else None)
+           for op, ri, hi in ops]
+    changed = True
+    while changed:
+        changed = False
+        for k, (op, ri, his, cost) in enumerate(out):
+            if ri is None or not his:
+                continue
+            for j in (k + 1, k - 1):
+                if not (0 <= j < len(out)):
+                    continue
+                op2, ri2, his2, _ = out[j]
+                if op2 == "ins" and his2:
+                    hs = tuple(sorted(his + his2))
+                    c = match_cost(expected[ri], "".join(hyp[h] for h in hs))
+                    if c < cost and c <= 0.25:
+                        out[k] = ("match", ri, hs, c)
+                        del out[j]
+                        changed = True
+                        break
+                if op2 == "del" and ri2 is not None:
+                    pair = (ri2, ri) if j < k else (ri, ri2)
+                    c = match_cost(expected[pair[0]] + expected[pair[1]], "".join(hyp[h] for h in his))
+                    if c < cost and c <= 0.25:
+                        out[k] = ("match", ri, his, c)
+                        out[j] = ("match", ri2, his, c)
+                        changed = True
+                        break
+            if changed:
+                break
+    return out
 
 
 def _hyp_words(model, toks: list[tuple[int, int, int]]) -> list[dict]:
@@ -149,6 +207,104 @@ def _finding(kind: str, w: dict | None, confidence: float, severity: str, measur
     return f
 
 
+# Word verdict thresholds. Calibrated on real recordings with scripts/evaluate_coach.py: correctly
+# recited words of professional reciters (false alarms) against controlled real mistakes (words
+# deleted, replaced or repeated in those recordings). See README, "Measured accuracy".
+OK_COST, NEAR_COST = 0.1, 0.25          # text distance between expected and recognised word
+OK_CONF, NEAR_CONF = 0.35, 0.6          # alignment confidence needed at each text distance
+SUBST_CONF = 0.8                        # below this a different recognised word counts as a substitution
+MISSED_CONF, MISSED_DUR = 0.3, 0.15
+
+# Acoustic tajweed checks that are reported. A check stays off when, measured on professional
+# recitations, it fires too often on correct recitation to be trusted (it is still measured).
+CHECKS = {"madd": True, "ghunnah": False, "qalqalah": True, "waqf_midword": True}
+MADD_SHORT, MADD_LONG = 0.65, 1.7       # flag a madd held below/above this share of its required counts
+
+
+def word_verdict(op: str, cost: float | None, conf: float, dur: float) -> str:
+    if op == "del" or cost is None:
+        if dur < MISSED_DUR or conf < MISSED_CONF:
+            return "missed"
+        return "ok" if conf >= NEAR_CONF else "unclear"
+    if cost <= OK_COST:
+        return "ok" if conf >= OK_CONF else "unclear"
+    if cost <= NEAR_COST:
+        return "ok" if conf >= NEAR_CONF else "unclear"
+    # the model wrote a different word; if the expected word still fits the audio well it is only
+    # "unclear", otherwise a likely substitution
+    return "unclear" if conf >= SUBST_CONF else "substituted"
+
+
+def align_words(model, y: np.ndarray, surah: int, a_from: int, a_to: int, words: list[dict] | None = None,
+                progress: Callable[[str, int], None] | None = None) -> dict:
+    """Recognise `y` (16 kHz, already trimmed) and force-align the expected words of the passage.
+
+    The model can spell a word several ways (with or without diacritics, different word pieces).
+    Where its free transcription agrees with an expected word, that word is aligned with the model's
+    own spelling; elsewhere with the reference spelling. A word's confidence then measures how well
+    the expected word explains the audio, not which spelling the model happened to prefer.
+
+    Returns {words (with seg_local/core_local in seconds of `y`, confidence, gop), ops, hyp, rec}.
+    """
+    prog = progress or (lambda s, p: None)
+    words = words if words is not None else passage_with_rules(surah, a_from, a_to)
+    rec = model.recognize_long(y)
+    hyp_words = _hyp_words(model, greedy(rec.logp, rec.blank))
+    hyp = [h["text"] for h in hyp_words]
+    prog("alignment", 45)
+    options = [False, True] if (a_from == 1 and surah not in (1, 9)) else [False]
+    best = None
+    for with_bas in options:
+        ws = (basmalah_words(surah) + words) if with_bas else words
+        ref_ids, ref_owner = model.passage_tokens(surah, a_from, a_to, ws, include_basmalah=with_bas)
+        ref_by_word: list[list[int]] = [[] for _ in ws]
+        for tid, wi in zip(ref_ids, ref_owner):
+            if 0 <= wi < len(ws):
+                ref_by_word[wi].append(tid)
+        norms = [w["norm"] for w in ws]
+        ops = refine_ops(edit_ops(norms, hyp, sub_cost=word_cost), norms, hyp)
+        targets, owner = [], []
+        shared = {}
+        for op, ri, his, cost in ops:
+            if len(his) == 1:
+                shared.setdefault(his[0], []).append(ri)
+        for op, ri, his, cost in ops:
+            if ri is None:
+                continue
+            # the model's own spelling where it agrees (a hyp word shared by two expected words keeps the reference spelling)
+            use_hyp = his and cost is not None and cost <= 0.25 and len(shared.get(his[0], [ri])) == 1
+            toks = [t for h in his for t in hyp_words[h]["ids"]] if use_hyp else ref_by_word[ri]
+            targets += toks
+            owner += [ri] * len(toks)
+        try:
+            sp, lp = forced_align(rec.logp, targets, rec.blank)
+        except ValueError:
+            continue
+        if best is None or lp > best[0]:
+            best = (lp, ws, owner, sp, ops)
+    if best is None:
+        raise CoachError("The recording is too short for the selected ayahs. Did you select the right range?")
+    _, words, tok_word, spans, ops = best
+    words = [dict(w) for w in words]
+    frame_lp = forced_frame_logps(rec.logp, spans, rec.blank)
+    for wi, w in enumerate(words):
+        mine = [sp for sp, tw in zip(spans, tok_word) if tw == wi and sp.start >= 0]
+        if not mine:
+            w["seg_local"] = w["core_local"] = None
+            w["confidence"] = 0.0
+            continue
+        a, b = min(sp.start for sp in mine), max(sp.end for sp in mine)
+        # extend to the blank frames that follow (CTC peaks are short; the word lasts until the next token)
+        nxt = [sp.start for sp, tw in zip(spans, tok_word) if tw > wi and sp.start > b]
+        b_ext = (min(nxt) - 1) if nxt else min(rec.logp.shape[0] - 1, b + int(0.4 / rec.frame_s))
+        gop = segment_gop(rec.logp, a, b, float(frame_lp[a:b + 1].sum()))
+        w["seg_local"] = [a * rec.frame_s, (b_ext + 1) * rec.frame_s]
+        w["core_local"] = [a * rec.frame_s, (b + 1) * rec.frame_s]
+        w["gop"] = round(gop, 3)
+        w["confidence"] = float(min(1.0, math.exp(gop / 1.5)))
+    return {"words": words, "ops": ops, "hyp": hyp, "rec": rec}
+
+
 def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float = 120,
             progress: Callable[[str, int], None] | None = None) -> dict:
     prog = progress or (lambda s, p: None)
@@ -162,7 +318,7 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
         y = decode(audio, sr=SR, max_seconds=max_seconds)
     except AudioError as e:
         raise CoachError(str(e)) from e
-    y, _ = trim(y, SR)
+    y, trim_off = trim(y, SR)
     if y.size < SR * 0.8:
         raise CoachError("No recitation was found in the recording.")
     peak = float(np.max(np.abs(y)))
@@ -186,89 +342,31 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
         prog("done", 100)
         return report
 
-    # ---- recognition
     prog("recognition", 25)
-    rec = model.recognize(y)
-    hyp_words = _hyp_words(model, greedy(rec.logp, rec.blank))
-    hyp = [h["text"] for h in hyp_words]
+    al = align_words(model, y, surah, a_from, a_to, words, progress=prog)
+    words, ops, hyp, rec = al["words"], al["ops"], al["hyp"], al["rec"]
     hyp_text = " ".join(hyp)
-
-    # ---- alignment of the expected text
-    # The model can spell a word several ways (with or without diacritics, different word pieces).
-    # Where its free transcription agrees with an expected word, that word is aligned with the
-    # model's own spelling; elsewhere with the reference spelling. A word's confidence then measures
-    # how well the expected word explains the audio, not which spelling the model happened to prefer.
-    prog("alignment", 45)
-    options = [False, True] if (a_from == 1 and surah not in (1, 9)) else [False]
-    best = None
-    for with_bas in options:
-        ws = (basmalah_words(surah) + words) if with_bas else words
-        ref_ids, ref_owner = model.passage_tokens(surah, a_from, a_to, ws, include_basmalah=with_bas)
-        ref_by_word: list[list[int]] = [[] for _ in ws]
-        for tid, wi in zip(ref_ids, ref_owner):
-            if 0 <= wi < len(ws):
-                ref_by_word[wi].append(tid)
-        ops = edit_ops([w["norm"] for w in ws], hyp, sub_cost=word_cost)
-        targets, owner = [], []
-        for op, ri, hi in ops:
-            if ri is None:
-                continue
-            use_hyp = hi is not None and word_cost(ws[ri]["norm"], hyp[hi]) <= 0.25
-            toks = hyp_words[hi]["ids"] if use_hyp else ref_by_word[ri]
-            targets += toks
-            owner += [ri] * len(toks)
-        try:
-            sp, lp = forced_align(rec.logp, targets, rec.blank)
-        except ValueError:
-            continue
-        if best is None or lp > best[0]:
-            best = (lp, ws, owner, sp, ops)
-    if best is None:
-        raise CoachError("The recording is too short for the selected ayahs. Did you select the right range?")
-    _, words, tok_word, spans, ops = best
-    frame_lp = forced_frame_logps(rec.logp, spans, rec.blank)
-    for wi, w in enumerate(words):
-        mine = [sp for sp, tw in zip(spans, tok_word) if tw == wi and sp.start >= 0]
-        if not mine:
-            w["seg"], w["confidence"] = None, 0.0
-            continue
-        a, b = min(sp.start for sp in mine), max(sp.end for sp in mine)
-        # extend to the blank frames that follow (CTC peaks are short; the word lasts until the next token)
-        nxt = [sp.start for sp, tw in zip(spans, tok_word) if tw > wi and sp.start > b]
-        b_ext = (min(nxt) - 1) if nxt else min(rec.logp.shape[0] - 1, b + int(0.4 / rec.frame_s))
-        gop = segment_gop(rec.logp, a, b, float(frame_lp[a:b + 1].sum()))
-        w["seg"] = [round(a * rec.frame_s, 3), round((b_ext + 1) * rec.frame_s, 3)]
-        w["core"] = [a * rec.frame_s, (b + 1) * rec.frame_s]
-        w["gop"] = round(gop, 3)
-        w["confidence"] = float(min(1.0, math.exp(gop / 1.5)))
+    for w in words:
+        if w.get("seg_local"):
+            # times in the user's original recording (used for playback)
+            w["seg"] = [round(trim_off + w["seg_local"][0], 3), round(trim_off + w["seg_local"][1], 3)]
+            w["core"] = [round(trim_off + w["core_local"][0], 3), round(trim_off + w["core_local"][1], 3)]
+        else:
+            w["seg"] = w["core"] = None
 
     # ---- word verdicts: free transcription and alignment confidence together
     findings: list[dict] = []
-    for k, (op, ri, hi) in enumerate(ops):
-        if op in ("match", "sub"):
+    for k, (op, ri, his, cost) in enumerate(ops):
+        if ri is not None:
             w = words[ri]
-            w["heard"] = hyp[hi]
-            cost = word_cost(w["norm"], hyp[hi])
-            if cost <= 0.1:
-                w["status"] = "ok" if w["confidence"] >= 0.35 else "unclear"
-            elif cost <= 0.25:
-                w["status"] = "ok" if w["confidence"] >= 0.6 else "unclear"
-            else:
-                # the model wrote a different word; if the expected word still fits the audio well
-                # it is only "unclear", otherwise a likely substitution
-                w["status"] = "unclear" if w["confidence"] >= 0.8 else "substituted"
-        elif op == "del":
-            w = words[ri]
-            dur = (w["seg"][1] - w["seg"][0]) if w.get("seg") else 0
-            if dur < 0.15 or w["confidence"] < 0.3:
-                w["status"] = "missed"
-            else:
-                w["status"] = "ok" if w["confidence"] >= 0.6 else "unclear"
-            w["heard"] = None
+            w["heard"] = "".join(hyp[h] for h in his) if his else None
+            w["textCost"] = None if cost is None else round(cost, 3)
+            dur = (w["seg_local"][1] - w["seg_local"][0]) if w.get("seg_local") else 0.0
+            w["status"] = word_verdict(op, cost, w["confidence"], dur)
         else:  # insertion: attach to the closest preceding expected word
             prev = next((o[1] for o in reversed(ops[:k]) if o[1] is not None), None)
             anchor = words[prev] if prev is not None else words[0]
-            anchor.setdefault("extraAfter", []).append(hyp[hi])
+            anchor.setdefault("extraAfter", []).append(" ".join(hyp[h] for h in his))
 
     # skipped ayahs: every word missed
     for a in range(a_from, a_to + 1):
@@ -295,44 +393,51 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
     feats = checks.frame_features(y)
     unit, unit_basis = checks.harakah_unit(feats, [w for w in words if w.get("status") == "ok"])
     performed = 0
+    measurements: list[dict] = []
     rules_meta = {r["id"]: r for r in _rules_index()}
     if unit is not None:
         for wi, w in enumerate(words):
-            if w.get("status") != "ok" or w["confidence"] < 0.45 or not w.get("seg"):
+            if w.get("status") != "ok" or w["confidence"] < 0.45 or not w.get("seg_local"):
                 continue
-            a, b = int(w["seg"][0] / checks.HOP), int(w["seg"][1] / checks.HOP)
+            a, b = int(w["seg_local"][0] / checks.HOP), int(w["seg_local"][1] / checks.HOP)
             coach_rules = [h for h in w["rules"] if rules_meta.get(h, {}).get("coach")]
             for h in coach_rules:
                 kind = rules_meta[h]["coach"]
+                where = {"surah": w["surah"], "ayah": w["ayah"], "word": w["word"], "hukm": h}
                 if kind == "madd":
                     lo, hi = rules_meta[h]["counts"]
                     if lo <= 2:
                         continue  # 2-count madds are the tempo reference, not scored
-                    performed += 1
                     d = checks.sustained_vowel(feats, a, b)
                     counts = d / unit
+                    measurements.append({**where, "kind": "madd", "counts": round(counts, 2), "required": [lo, hi]})
+                    if not CHECKS["madd"]:
+                        continue
+                    performed += 1
                     conf = (0.6 if unit_basis == "natural-madd" else 0.45) * min(1.0, w["confidence"] + 0.2)
-                    if counts < 0.65 * lo:
+                    if counts < MADD_SHORT * lo:
                         findings.append(_finding("madd_short", w, conf, "warning", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [lo, hi], "seconds": round(d, 2)}))
-                    elif counts > 1.7 * hi:
+                    elif counts > MADD_LONG * hi:
                         findings.append(_finding("madd_long", w, conf * 0.8, "info", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [lo, hi], "seconds": round(d, 2)}))
                 elif kind == "ghunnah":
-                    performed += 1
                     bb = b
-                    if any(sp[3] for sp in w["spans"] if sp[2] == h) and wi + 1 < len(words) and words[wi + 1].get("seg"):
-                        nb = words[wi + 1]["seg"]
+                    if any(sp[3] for sp in w["spans"] if sp[2] == h) and wi + 1 < len(words) and words[wi + 1].get("seg_local"):
+                        nb = words[wi + 1]["seg_local"]
                         bb = int((nb[0] + 0.4 * (nb[1] - nb[0])) / checks.HOP)
                     d = checks.nasal_murmur(feats, a, bb)
                     counts = d / unit
+                    measurements.append({**where, "kind": "ghunnah", "counts": round(counts, 2), "required": [2, 2]})
+                    if not CHECKS["ghunnah"]:
+                        continue
+                    performed += 1
                     if counts < 0.8:
                         findings.append(_finding("ghunnah_short", w, 0.35 * min(1.0, w["confidence"] + 0.2), "info", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [2, 2], "seconds": round(d, 2)}))
                 elif kind == "qalqalah":
                     if h == "qalqalah-kubra" and not w["lastInAyah"]:
                         continue
-                    performed += 1
                     if h == "qalqalah-kubra":
                         wa, wb = max(a, b - int(0.35 / checks.HOP)), b
                     else:
@@ -340,7 +445,12 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                         frac = (sp[0] / max(len(w["text"]), 1)) if sp else 0.5
                         c = int(a + frac * (b - a))
                         wa, wb = max(a, c - 8), min(b, c + 12)
-                    if not checks.release_burst(feats, wa, wb):
+                    burst = checks.release_burst(feats, wa, wb)
+                    measurements.append({**where, "kind": "qalqalah", "burst": bool(burst)})
+                    if not CHECKS["qalqalah"]:
+                        continue
+                    performed += 1
+                    if not burst:
                         findings.append(_finding("qalqalah_missing", w, 0.3 * min(1.0, w["confidence"] + 0.2), "info", hukm=h))
 
     # ---- pace and pauses
@@ -349,23 +459,23 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
     rate = n_moras / speech_s if speech_s > 0 else 0
     if rate > 9.0:
         findings.append(_finding("pace_rushed", None, 0.45, "info", measured={"unitsPerSecond": round(rate, 1)}))
-    for a_s, b_s in _gaps(quality["segments"]):
+    for a_s, b_s in pauses(y, SR, 0.3):
         for w in words:
-            sg = w.get("core")
-            if sg and sg[0] + 0.08 < a_s and b_s < sg[1] - 0.08 and b_s - a_s > 0.3 and w.get("status") == "ok":
-                findings.append(_finding("waqf_midword", w, 0.35, "info", measured={"pauseSeconds": round(b_s - a_s, 2)}))
+            sg = w.get("core_local")
+            if sg and sg[0] + 0.08 < a_s and b_s < sg[1] - 0.08 and w.get("status") == "ok":
+                measurements.append({"surah": w["surah"], "ayah": w["ayah"], "word": w["word"], "kind": "waqf_midword",
+                                     "pauseSeconds": round(b_s - a_s, 2)})
+                if CHECKS["waqf_midword"]:
+                    findings.append(_finding("waqf_midword", w, 0.35, "info", measured={"pauseSeconds": round(b_s - a_s, 2)}))
 
     # ---- summary
     prog("summary", 90)
     report.update(_summary(words, findings, quality, performed, unit, unit_basis))
+    report["measurements"] = measurements
     report["recognized"] = hyp_text
     report["processingSeconds"] = round(time.time() - t0, 1)
     prog("done", 100)
     return report
-
-
-def _gaps(segs: list[tuple[float, float]]) -> list[tuple[float, float]]:
-    return [(segs[i][1], segs[i + 1][0]) for i in range(len(segs) - 1)]
 
 
 def _public_words(words: list[dict]) -> list[dict]:
@@ -373,7 +483,7 @@ def _public_words(words: list[dict]) -> list[dict]:
     for w in words:
         out.append({"surah": w["surah"], "ayah": w["ayah"], "word": w["word"], "text": w["text"],
                     "status": w.get("status", "unchecked"), "confidence": round(w.get("confidence", 0.0), 2),
-                    "seg": w.get("seg"), "heard": w.get("heard"), "rules": sorted(w["rules"])})
+                    "seg": w.get("seg"), "core": w.get("core"), "heard": w.get("heard"), "rules": sorted(w["rules"])})
     return out
 
 

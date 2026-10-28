@@ -85,13 +85,19 @@ def _longest_run(mask: np.ndarray, max_gap: int = 2) -> tuple[int, int]:
     return best
 
 
-def sustained_vowel(f: Frames, a: int, b: int) -> float:
-    """Seconds of the longest steady, loud, voiced stretch in frames [a, b)."""
+def sustained_vowel_span(f: Frames, a: int, b: int) -> tuple[int, int]:
+    """(first frame, number of frames) of the longest steady, loud, voiced stretch in frames [a, b)."""
     if b - a < 3:
-        return 0.0
+        return a, 0
     e = f.energy_db[a:b]
     m = f.voiced[a:b] & (e > e.max() - 14) & (f.flux[a:b] < 0.9) & (f.low_ratio[a:b] < 0.85)
-    return _longest_run(m)[1] * HOP
+    start, length = _longest_run(m)
+    return a + start, length
+
+
+def sustained_vowel(f: Frames, a: int, b: int) -> float:
+    """Seconds of the longest steady, loud, voiced stretch in frames [a, b)."""
+    return sustained_vowel_span(f, a, b)[1] * HOP
 
 
 def nasal_murmur(f: Frames, a: int, b: int) -> float:
@@ -144,8 +150,8 @@ def harakah_unit(f: Frames, words: list[dict]) -> tuple[float | None, str]:
     Prefers natural-madd vowels (2 counts each); falls back to vowel units per word."""
     natural = []
     for w in words:
-        if w.get("seg") and w["rules"] == {"madd-tabee-kalimi"} and w["confidence"] >= 0.5:
-            a, b = w["seg"]
+        if w.get("seg_local") and w["rules"] == {"madd-tabee-kalimi"} and w["confidence"] >= 0.5:
+            a, b = w["seg_local"]
             d = sustained_vowel(f, int(a / HOP), int(b / HOP))
             if d > 0.08:
                 natural.append(d / 2)
@@ -153,9 +159,9 @@ def harakah_unit(f: Frames, words: list[dict]) -> tuple[float | None, str]:
         return float(np.median(natural)), "natural-madd"
     per = []
     for w in words:
-        if w.get("seg") and not (w["rules"] & {"madd-muttasil", "madd-munfasil", "madd-lazim-kalimi-muthaqqal",
+        if w.get("seg_local") and not (w["rules"] & {"madd-muttasil", "madd-munfasil", "madd-lazim-kalimi-muthaqqal",
                                                "madd-lazim-kalimi-mukhaffaf"}) and w["confidence"] >= 0.5:
-            a, b = w["seg"]
+            a, b = w["seg_local"]
             per.append((b - a) / moras(w["text"]))
     if len(per) >= 3:
         return float(np.clip(np.median(per), 0.07, 0.5)), "syllable-units"

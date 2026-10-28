@@ -96,4 +96,16 @@ def run_compare(job: dict, p: dict, progress):
     }, None
 
 
-HANDLERS = {"transform": run_transform, "tajweed": run_tajweed, "compare": run_compare}
+def run_segment(job: dict, p: dict, progress):
+    progress("reference", 10)
+    try:
+        t = reference.surah_timings(p["server"], int(p["surah"]))
+    except reference.ReferenceUnavailable as e:
+        raise UserFacingError(str(e)) from e
+    if not t:
+        raise UserFacingError("Ayah timings could not be computed for this recording.")
+    progress("done", 100)
+    return {"surah": int(p["surah"]), "ayahs": len(t), "unreliable": [x["ayah"] for x in t if not x["reliable"]]}, None
+
+
+HANDLERS = {"transform": run_transform, "tajweed": run_tajweed, "compare": run_compare, "segment": run_segment}

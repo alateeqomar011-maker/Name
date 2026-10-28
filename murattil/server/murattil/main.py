@@ -16,7 +16,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
-from . import auth, db, jobs, progress, quotas, quran, reciters, storage
+from . import auth, db, jobs, progress, quotas, quran, reciters, reference, storage
 from .config import FREE_PLAN, PLANS, SUPPORTER_PLAN, settings
 from .tajweed import asr
 from .voice import engine, registry
@@ -224,8 +224,30 @@ def reciter_timings(rid: str, surah: int):
         raise HTTPException(404, "Unknown reciter or surah")
     m = reciters.mp3quran_for(r, reciters.mp3quran_index())
     if not m:
-        return {"timings": None}
-    return {"timings": reciters.mp3quran_timings(m["server"], surah), "url": f"{m['server']}{surah:03d}.mp3"}
+        return {"timings": None, "source": None}
+    url = f"{m['server']}{surah:03d}.mp3"
+    published = reciters.mp3quran_timings(m["server"], surah)
+    if published:
+        return {"timings": published, "source": "published", "url": url}
+    computed = reference.cached_computed_timings(m["server"], surah)
+    if computed:
+        return {"timings": computed, "source": "computed", "url": url}
+    return {"timings": None, "source": None, "url": url, "canCompute": asr.status()["available"]}
+
+
+@app.post("/api/reciters/{rid}/timings")
+def compute_timings(rid: str, surah: int, user=Depends(auth.current_user)):
+    """Find ayah boundaries in a full-surah recording that has no published timings (background job)."""
+    r = reciters.get(rid)
+    if r is None or not 1 <= surah <= 114:
+        raise HTTPException(404, "Unknown reciter or surah")
+    m = reciters.mp3quran_for(r, reciters.mp3quran_index())
+    if not m:
+        raise HTTPException(422, "This reciter has no full-surah recording.")
+    if not asr.status()["available"]:
+        raise HTTPException(503, "The Quran speech-recognition model is not installed on this server.")
+    _guard_queue(user)
+    return jobs.get(user["id"], jobs.enqueue(user["id"], "segment", {"reciterId": rid, "surah": surah, "server": m["server"]}, None, None))
 
 
 @app.post("/api/admin/reciters/health")

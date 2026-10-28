@@ -4,6 +4,7 @@ cached on disk, and nothing fetched here is ever served back to users as a downl
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import threading
 
@@ -11,7 +12,7 @@ import httpx
 import numpy as np
 
 from . import quran, reciters
-from .audio.io import AudioError, decode
+from .audio.io import AudioError, decode, resample
 from .config import settings
 
 log = logging.getLogger(__name__)
@@ -107,14 +108,14 @@ def passage(reciter_id: str, surah: int, a_from: int, a_to: int, sr: int,
                 return np.concatenate(parts[:-1]), {"recording": r["key"], "ayahs": bounds}
             if r["kind"] == "surah" and surah in (r.get("surahs") or [surah]):
                 url = f"{r['server']}{surah:03d}.mp3"
-                timings = reciters.mp3quran_timings(r["server"], surah)
-                whole = a_from == 1 and a_to == n_ayahs
-                if not timings and not whole:
-                    errors.append("ayah timings are not published for this recording")
-                    continue
                 y = _decode(fetch(url), sr)
-                if whole and not timings:
-                    return y, {"recording": r["key"], "ayahs": None}
+                timings = reciters.mp3quran_timings(r["server"], surah) or surah_timings(r["server"], surah, y, sr)
+                whole = a_from == 1 and a_to == n_ayahs
+                if not timings:
+                    if whole:
+                        return y, {"recording": r["key"], "ayahs": None}
+                    errors.append("ayah timings are not available for this recording")
+                    continue
                 tm = {x["ayah"]: x for x in timings}
                 if a_from not in tm or a_to not in tm:
                     errors.append("ayah timings incomplete")
@@ -129,6 +130,52 @@ def passage(reciter_id: str, surah: int, a_from: int, a_to: int, sr: int,
     raise ReferenceUnavailable(
         "No reference recitation is available for this passage from this reciter"
         + (f" ({errors[0]})." if errors else "."))
+
+
+MAX_SEGMENT_MINUTES = 75.0
+
+
+def computed_timings_path(server: str, surah: int):
+    d = settings.cache_dir / "segments"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{hashlib.sha1(server.encode()).hexdigest()[:16]}_{surah:03d}.json"
+
+
+def cached_computed_timings(server: str, surah: int) -> list[dict] | None:
+    p = computed_timings_path(server, surah)
+    if p.is_file():
+        try:
+            return json.loads(p.read_text())
+        except ValueError:
+            return None
+    return None
+
+
+def surah_timings(server: str, surah: int, y: np.ndarray | None = None, sr: int = 16000) -> list[dict] | None:
+    """Ayah timings for a full-surah recording that has none published, computed by aligning the
+    surah text to the audio with the Quran recogniser (see tajweed/segment.py). Cached. Returns
+    None when the recogniser is not installed or the recording is too long."""
+    cached = cached_computed_timings(server, surah)
+    if cached is not None:
+        return cached or None
+    from .tajweed import asr, segment
+    if not asr.status()["available"]:
+        return None
+    with _lock_for(f"segment:{server}:{surah}"):
+        cached = cached_computed_timings(server, surah)
+        if cached is not None:
+            return cached or None
+        if y is None:
+            y, sr = _decode(fetch(f"{server}{surah:03d}.mp3"), 16000), 16000
+        y16 = y if sr == 16000 else resample(y, sr, 16000)
+        if y16.size / 16000 > MAX_SEGMENT_MINUTES * 60:
+            return None
+        n = quran.surah_meta(surah)["ayahs"]
+        segs = segment.segment(y16, [(surah, a) for a in range(1, n + 1)])
+        out = [{"ayah": sg["ayah"], "start": sg["start"], "end": sg["end"], "reliable": sg["reliable"],
+                "computed": True} for sg in segs]
+        computed_timings_path(server, surah).write_text(json.dumps(out))
+        return out
 
 
 def profile_material(reciter_id: str, sr: int, max_seconds: float = 300) -> np.ndarray:
