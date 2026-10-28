@@ -67,16 +67,22 @@ Only checks shown to be reliable on real audio are reported:
 
 | Check | On correct professional recitation | Detects a real mistake | Reported? |
 | --- | --- | --- | --- |
-| Madd length (4–6 counts) | before the fix below: flagged "short" on 95 % of professional madds; re-measurement after the fix in progress | controlled shortening to ~1.5 counts (see below) | until re-measured: as information only |
-| Ghunnah duration | flagged "short" on 98 % of professional ghunnahs (before the fix below) | not measurable without labelled mistakes | **no** |
-| Qalqalah release | flagged "missing" on 77 % of professional qalqalahs (room reverb fills the closure) | — | **no** |
+| Madd too short (4–6 count madds held under 45 % of their count) | 4.8 % of 104 professional madds flagged (2.5 % of recordings) | **62 %** of real madds shortened to ~1.5 counts (61 trials) | **yes**, as a warning |
+| Madd too long | 39 % of professional madds measure "long" (reciters' tempo varies within a recitation) | — | **no** |
+| Ghunnah duration | 32 % of 876 professional ghunnahs measure "short" | not measurable without labelled mistakes | **no** |
+| Qalqalah release | 77 % of 116 professional qalqalahs measure "missing" (room reverb fills the closure) | — | **no** |
 | Pause inside a word | 16 pauses in 2,836 professional words | — | yes, as information only |
+
+For comparison, the madd check flags 60 % of the crowd-sourced TLOG madds. That is consistent with
+the technique comparison below, where learners held a 6-count madd for 0.1–0.5 s.
 
 Two bugs were found this way. The detector for a held vowel used a spectral-steadiness threshold
 tuned on synthetic speech, which real recordings never pass. It also excluded the vowels ī and ū,
 so real madds measured about 0 counts. Both are fixed: steadiness is now measured on mel bands,
-relative to each recording. A controlled test supports this: the held vowel of a professional's
-madd is shortened to about 1.5 counts by cutting out its middle, and the coach must notice.
+relative to each recording. Professional madds flagged "short" fell from 95 % to 4.8 %.
+The detection test is controlled: the held vowel of a professional's madd is shortened to about
+1.5 counts by cutting out its middle (median 6.6 counts before, 1.5 after), and the coach must
+notice.
 
 ### Reciter technique comparison
 
@@ -274,8 +280,9 @@ python scripts/evaluate_segmentation.py --corpus DIR       # ayah boundaries in 
 - **Automated feedback is not a teacher.** About 1 word in 37 of correct professional recitation is
   flagged, and about 1 real word mistake in 5 is missed. The app always says so and recommends a
   qualified teacher.
-- **Few rule checks.** Ghunnah, qalqalah, makharij and sifat are not judged automatically. They are
-  taught with highlighted rules, explanations and reference playback.
+- **Few rule checks.** Only "madd too short" is judged automatically. Ghunnah, qalqalah, makharij
+  and sifat are taught with highlighted rules, explanations and reference playback, and compared
+  with the reciter in the technique view. They are not marked as mistakes.
 - **Technique scores compare you with one recording of a reciter.** They are closeness, not
   correctness.
 - **The neural blend outputs 16 kHz audio**; the signal-processing path runs at 24 kHz.

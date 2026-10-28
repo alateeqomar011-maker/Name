@@ -220,10 +220,14 @@ WAQF_SIGNS = set("ۖۗۘۙۚۛۜ")
 
 # Acoustic tajweed checks that are reported. A check stays off when, measured on professional
 # recitations, it fires too often on correct recitation to be trusted (it is still measured).
+# Measured with scripts/evaluate_coach.py on 204 professional and 131 crowd-sourced recordings:
+# madd short (below 0.45 of the required counts): 4.8% of correct professional madds flagged;
+#   62% of real madds shortened to ~1.5 counts caught — on, as a warning.
+# madd long: 39% of professional madds measure "long" (reciters' own tempo varies) — off.
+# ghunnah: "short" on 32% of professional ghunnahs — off.
 # qalqalah: "missing" on 77% of professional qalqalahs (room reverb fills the closure) — off.
-# ghunnah: "short" on 98% of professional ghunnahs — off.
-CHECKS = {"madd": True, "ghunnah": False, "qalqalah": False, "waqf_midword": True}
-MADD_SHORT, MADD_LONG = 0.65, 1.7       # flag a madd held below/above this share of its required counts
+CHECKS = {"madd": True, "madd_long": False, "ghunnah": False, "qalqalah": False, "waqf_midword": True}
+MADD_SHORT, MADD_LONG = 0.45, 1.7       # a madd held below/above this share of its required counts
 
 
 def word_verdict(op: str, cost: float | None, conf: float, dur: float) -> str:
@@ -425,12 +429,13 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                     if not CHECKS["madd"]:
                         continue
                     performed += 1
-                    checked(h, counts < MADD_SHORT * lo or counts > MADD_LONG * hi)
+                    too_long = CHECKS["madd_long"] and counts > MADD_LONG * hi
+                    checked(h, counts < MADD_SHORT * lo or too_long)
                     conf = (0.6 if unit_basis == "natural-madd" else 0.45) * min(1.0, w["confidence"] + 0.2)
                     if counts < MADD_SHORT * lo:
                         findings.append(_finding("madd_short", w, conf, "warning", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [lo, hi], "seconds": round(d, 2)}))
-                    elif counts > MADD_LONG * hi:
+                    elif too_long:
                         findings.append(_finding("madd_long", w, conf * 0.8, "info", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [lo, hi], "seconds": round(d, 2)}))
                 elif kind == "ghunnah":
