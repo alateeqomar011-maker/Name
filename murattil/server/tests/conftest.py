@@ -7,6 +7,7 @@ os.environ.setdefault("MURATTIL_VAR_DIR", os.path.join(_TMP, "var"))
 os.environ.setdefault("MURATTIL_MODELS_DIR", os.path.join(_TMP, "models"))
 os.environ.setdefault("MURATTIL_SECURE_COOKIES", "0")
 os.environ.setdefault("MURATTIL_WORKERS", "1")
+os.environ.setdefault("MURATTIL_WARM_UP", "0")
 
 import hashlib  # noqa: E402
 import threading  # noqa: E402

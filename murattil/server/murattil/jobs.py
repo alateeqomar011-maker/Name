@@ -7,6 +7,7 @@ the UI polls, and honour cancellation between stages.
 from __future__ import annotations
 
 import logging
+import shutil
 import threading
 import time
 import traceback
@@ -17,7 +18,8 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 
-QUOTA_KIND = {"transform": "transform", "tajweed": "analysis", "compare": "analysis", "segment": None}
+QUOTA_KIND = {"transform": "transform", "tajweed": "analysis", "compare": "analysis", "technique": "analysis",
+              "segment": None}
 MAX_ACTIVE_PER_USER = 2
 
 
@@ -82,7 +84,7 @@ def cancel(user_id: str, job_id: str) -> bool:
     if row["status"] == "queued":
         n = db.run("UPDATE jobs SET status = 'cancelled', stage = 'cancelled', finished_at = ? WHERE id = ? AND status = 'queued'",
                    db.now(), job_id)
-        if n and row["quota_day"]:
+        if n and row["quota_day"] and QUOTA_KIND.get(row["kind"]):
             quotas.refund(user_id, QUOTA_KIND[row["kind"]], row["quota_day"])
     elif row["status"] == "running":
         db.run("UPDATE jobs SET cancel_requested = 1 WHERE id = ?", job_id)
@@ -177,7 +179,10 @@ def run_pending_now() -> None:
 
 
 def cleanup(max_age_days: int = 30) -> None:
-    db.run("DELETE FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ?", db.now() - max_age_days * 86400)
+    cutoff = db.now() - max_age_days * 86400
+    for r in db.all_("SELECT id, user_id FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ?", cutoff):
+        shutil.rmtree(storage.job_dir(r["user_id"], r["id"]), ignore_errors=True)
+    db.run("DELETE FROM jobs WHERE finished_at IS NOT NULL AND finished_at < ?", cutoff)
 
 
 __all__ = ["enqueue", "get", "cancel", "start", "Cancelled", "UserFacingError", "storage"]

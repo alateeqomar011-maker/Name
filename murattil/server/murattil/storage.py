@@ -116,3 +116,11 @@ def delete(user_id: str, rid: str) -> bool:
 
 def delete_all(user_id: str) -> None:
     shutil.rmtree(settings.recordings_dir / user_id, ignore_errors=True)
+    shutil.rmtree(settings.var_dir / "jobfiles" / user_id, ignore_errors=True)
+
+
+def job_dir(user_id: str, job_id: str) -> Path:
+    """Private files a job produced (e.g. the reference clip of a technique comparison)."""
+    if not (user_id.isalnum() and job_id.isalnum()):
+        raise ValueError("bad id")
+    return settings.var_dir / "jobfiles" / user_id / job_id

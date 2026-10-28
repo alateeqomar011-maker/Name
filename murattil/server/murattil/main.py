@@ -38,11 +38,24 @@ def _health_refresher():
         time.sleep(6 * 3600)
 
 
+def _warm_up():
+    """Load the recogniser and run it once so the first user does not wait for a cold start."""
+    import numpy as np
+    try:
+        asr.load().recognize(np.zeros(16000, dtype=np.float32))
+    except asr.AsrUnavailable:
+        pass
+    except Exception:
+        log.exception("ASR warm-up failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.conn()
     jobs.start()
     threading.Thread(target=_health_refresher, name="murattil-health", daemon=True).start()
+    if settings.warm_up:
+        threading.Thread(target=_warm_up, name="murattil-warmup", daemon=True).start()
     yield
 
 
@@ -455,6 +468,35 @@ def voice_compare(body: CompareBody, user=Depends(auth.current_user)):
     return jobs.get(user["id"], jobs.enqueue(user["id"], "compare", payload, rec["id"], day))
 
 
+class TechniqueBody(BaseModel):
+    recordingId: str
+    reciterId: str
+    surah: int
+    ayahFrom: int
+    ayahTo: int
+    recordingKey: str | None = None
+
+
+@app.post("/api/voice/technique")
+def voice_technique(body: TechniqueBody, user=Depends(auth.current_user)):
+    """Measure the user's recitation against the reciter reciting the same passage."""
+    rec = _own_rec(user, body.recordingId)
+    if reciters.get(body.reciterId) is None:
+        raise HTTPException(422, "Unknown reciter")
+    if not quran.valid_range(body.surah, body.ayahFrom, body.ayahTo):
+        raise HTTPException(422, "Invalid surah or ayah range.")
+    if body.ayahTo - body.ayahFrom > 9:
+        raise HTTPException(422, "Choose at most 10 ayahs for a technique comparison.")
+    plan = auth.plan_of(user)
+    if (rec["duration_s"] or 0) > plan.max_tajweed_seconds + 0.5:
+        raise HTTPException(422, f"Technique comparison accepts recordings up to {plan.max_tajweed_seconds} s on your plan.")
+    _guard_queue(user)
+    day = quotas.reserve(user["id"], plan, "analysis")
+    payload = body.model_dump()
+    payload["maxSeconds"] = plan.max_tajweed_seconds
+    return jobs.get(user["id"], jobs.enqueue(user["id"], "technique", payload, rec["id"], day))
+
+
 @app.get("/api/voice/engines")
 def voice_engines():
     return engine.engine_status()
@@ -507,6 +549,17 @@ def get_job(jid: str, user=Depends(auth.current_user)):
     return j
 
 
+@app.get("/api/jobs/{jid}/reference")
+def job_reference(jid: str, user=Depends(auth.current_user)):
+    """The reference recitation a technique comparison was measured against."""
+    if jobs.get(user["id"], jid) is None:
+        raise HTTPException(404, "Job not found")
+    path = storage.job_dir(user["id"], jid) / "reference.m4a"
+    if not path.is_file():
+        raise HTTPException(404, "No reference audio for this job")
+    return FileResponse(path, media_type="audio/mp4", headers={"Cache-Control": "private, max-age=3600"})
+
+
 @app.delete("/api/jobs/{jid}")
 def cancel_job(jid: str, user=Depends(auth.current_user)):
     if not jobs.cancel(user["id"], jid):
@@ -524,6 +577,11 @@ def get_progress(user=Depends(auth.current_user)):
 @app.get("/api/daily")
 def get_daily(user=Depends(auth.current_user)):
     return progress.daily(user["id"])
+
+
+@app.get("/api/plan")
+def get_plan(user=Depends(auth.current_user)):
+    return progress.plan(user["id"])
 
 
 @app.get("/api/health")

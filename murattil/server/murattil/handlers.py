@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import uuid
 
-from . import db, quran, reciters, reference, storage
+from . import db, progress as practice, quran, reciters, reference, storage
 from .audio import analysis, style, world
-from .audio.io import AudioError, decode
+from .audio.io import AudioError, decode, encode_m4a
 from .audio.vad import trim
 from .jobs import UserFacingError
 from .tajweed import coach
-from .voice import engine, identity
+from .voice import engine, identity, technique
 
 
 def _input_audio(job: dict) -> tuple[dict, bytes]:
@@ -55,12 +55,55 @@ def run_tajweed(job: dict, p: dict, progress):
         raise UserFacingError(str(e)) from e
     errors = sum(1 for f in report["findings"] if f["severity"] == "error")
     warns = sum(1 for f in report["findings"] if f["severity"] == "warning")
+    s, a0, a1 = int(p["surah"]), int(p["ayahFrom"]), int(p["ayahTo"])
+    details = practice.attempt_metrics(report) if report["mode"] == "full" else None
+    prev = practice.previous_attempt(job["user_id"], s, a0, a1) if details else None
+    report["attempt"] = practice.compare_attempts(prev["details"], details, prev["at"]) if prev else None
     db.run("INSERT INTO practice(id, user_id, surah, ayah_from, ayah_to, job_id, recording_id, word_accuracy, errors,"
-           " warnings, tajweed_flags, confidence, mode, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-           uuid.uuid4().hex, job["user_id"], int(p["surah"]), int(p["ayahFrom"]), int(p["ayahTo"]), job["id"], rec["id"],
+           " warnings, tajweed_flags, confidence, mode, created_at, details) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+           uuid.uuid4().hex, job["user_id"], s, a0, a1, job["id"], rec["id"],
            report["scores"]["wordAccuracy"], errors, warns, report["scores"]["tajweedFlags"],
-           report["summary"]["confidence"], report["mode"], db.now())
+           report["summary"]["confidence"], report["mode"], db.now(), db.jdump(details) if details else None)
     return report, None
+
+
+def run_technique(job: dict, p: dict, progress):
+    """Compare the user's recitation of a passage with a reciter's recitation of the same passage."""
+    rec, data = _input_audio(job)
+    s, a0, a1 = int(p["surah"]), int(p["ayahFrom"]), int(p["ayahTo"])
+    progress("decoding", 5)
+    try:
+        y = decode(data, sr=technique.SR, max_seconds=float(p["maxSeconds"]))
+    except AudioError as e:
+        raise UserFacingError(str(e)) from e
+    progress("reference", 15)
+    try:
+        ref, info = reference.passage(p["reciterId"], s, a0, a1, sr=technique.SR, recording_key=p.get("recordingKey"))
+    except reference.ReferenceUnavailable as e:
+        raise UserFacingError(f"The reciter's recitation of this passage could not be loaded: {e}") from e
+    r = reciters.get(p["reciterId"])
+    try:
+        res = technique.compare(y, ref, s, a0, a1, r["name"], progress=progress)
+    except (technique.TechniqueUnavailable, coach.CoachError) as e:
+        raise UserFacingError(str(e)) from e
+    progress("saving", 92)
+    d = storage.job_dir(job["user_id"], job["id"])
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "reference.m4a").write_bytes(encode_m4a(ref, technique.SR, bitrate="64k"))
+    res.update({"reciter": {"id": p["reciterId"], "name": r["name"]}, "passage": {"surah": s, "from": a0, "to": a1},
+                "recordingId": rec["id"], "reference": {"recording": info.get("recording"),
+                                                         "audio": f"/api/jobs/{job['id']}/reference"}})
+    db.run("INSERT INTO technique(id, user_id, surah, ayah_from, ayah_to, reciter_id, job_id, recording_id, overall,"
+           " scores, pace_ratio, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+           uuid.uuid4().hex, job["user_id"], s, a0, a1, p["reciterId"], job["id"], rec["id"], res["overall"],
+           db.jdump(res["scores"]), res["pacing"]["ratio"], db.now())
+    prev = db.one("SELECT overall, scores, created_at FROM technique WHERE user_id = ? AND reciter_id = ? AND surah = ?"
+                  " AND ayah_from = ? AND ayah_to = ? AND job_id != ? ORDER BY created_at DESC LIMIT 1",
+                  job["user_id"], p["reciterId"], s, a0, a1, job["id"])
+    res["previous"] = None if prev is None else {"overall": prev["overall"], "scores": db.jload(prev["scores"], {}),
+                                                 "at": prev["created_at"]}
+    progress("done", 100)
+    return res, None
 
 
 def run_compare(job: dict, p: dict, progress):
@@ -108,4 +151,5 @@ def run_segment(job: dict, p: dict, progress):
     return {"surah": int(p["surah"]), "ayahs": len(t), "unreliable": [x["ayah"] for x in t if not x["reliable"]]}, None
 
 
-HANDLERS = {"transform": run_transform, "tajweed": run_tajweed, "compare": run_compare, "segment": run_segment}
+HANDLERS = {"transform": run_transform, "tajweed": run_tajweed, "compare": run_compare, "technique": run_technique,
+            "segment": run_segment}

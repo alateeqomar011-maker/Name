@@ -192,6 +192,7 @@ def _finding(kind: str, w: dict | None, confidence: float, severity: str, measur
     f = {
         "kind": kind, "severity": severity, "confidence": round(confidence, 2), "confidenceLabel": _label(confidence),
         "en": base["en"], "ar": base["ar"], "tipEn": base["tip_en"], "tipAr": base["tip_ar"],
+        "stepsEn": content.STEPS[kind]["en"], "stepsAr": content.STEPS[kind]["ar"],
         "measured": measured or {},
     }
     if w is not None:
@@ -214,6 +215,8 @@ OK_COST, NEAR_COST = 0.1, 0.25          # text distance between expected and rec
 OK_CONF, NEAR_CONF = 0.35, 0.6          # alignment confidence needed at each text distance
 SUBST_CONF = 0.8                        # below this a different recognised word counts as a substitution
 MISSED_CONF, MISSED_DUR = 0.3, 0.15
+
+WAQF_SIGNS = set("ۖۗۘۙۚۛۜ")
 
 # Acoustic tajweed checks that are reported. A check stays off when, measured on professional
 # recitations, it fires too often on correct recitation to be trusted (it is still measured).
@@ -393,7 +396,13 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
     feats = checks.frame_features(y)
     unit, unit_basis = checks.harakah_unit(feats, [w for w in words if w.get("status") == "ok"])
     performed = 0
+    rule_stats: dict[str, dict] = {}
     measurements: list[dict] = []
+
+    def checked(h: str, flagged: bool) -> None:
+        st = rule_stats.setdefault(h, {"checked": 0, "flagged": 0})
+        st["checked"] += 1
+        st["flagged"] += int(flagged)
     rules_meta = {r["id"]: r for r in _rules_index()}
     if unit is not None:
         for wi, w in enumerate(words):
@@ -414,6 +423,7 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                     if not CHECKS["madd"]:
                         continue
                     performed += 1
+                    checked(h, counts < MADD_SHORT * lo or counts > MADD_LONG * hi)
                     conf = (0.6 if unit_basis == "natural-madd" else 0.45) * min(1.0, w["confidence"] + 0.2)
                     if counts < MADD_SHORT * lo:
                         findings.append(_finding("madd_short", w, conf, "warning", hukm=h,
@@ -432,6 +442,7 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                     if not CHECKS["ghunnah"]:
                         continue
                     performed += 1
+                    checked(h, counts < 0.8)
                     if counts < 0.8:
                         findings.append(_finding("ghunnah_short", w, 0.35 * min(1.0, w["confidence"] + 0.2), "info", hukm=h,
                                                  measured={"counts": round(counts, 1), "required": [2, 2], "seconds": round(d, 2)}))
@@ -450,6 +461,7 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                     if not CHECKS["qalqalah"]:
                         continue
                     performed += 1
+                    checked(h, not burst)
                     if not burst:
                         findings.append(_finding("qalqalah_missing", w, 0.3 * min(1.0, w["confidence"] + 0.2), "info", hukm=h))
 
@@ -459,7 +471,8 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
     rate = n_moras / speech_s if speech_s > 0 else 0
     if rate > 9.0:
         findings.append(_finding("pace_rushed", None, 0.45, "info", measured={"unitsPerSecond": round(rate, 1)}))
-    for a_s, b_s in pauses(y, SR, 0.3):
+    gaps = pauses(y, SR, 0.3)
+    for a_s, b_s in gaps:
         for w in words:
             sg = w.get("core_local")
             if sg and sg[0] + 0.08 < a_s and b_s < sg[1] - 0.08 and w.get("status") == "ok":
@@ -467,6 +480,28 @@ def analyze(audio: bytes, surah: int, a_from: int, a_to: int, max_seconds: float
                                      "pauseSeconds": round(b_s - a_s, 2)})
                 if CHECKS["waqf_midword"]:
                     findings.append(_finding("waqf_midword", w, 0.35, "info", measured={"pauseSeconds": round(b_s - a_s, 2)}))
+
+    # ---- fluency: articulation rate and where the reciter paused inside ayahs
+    seq = [w for w in words if w["ayah"] > 0 and w.get("core_local")]
+    inside = off_waqf = 0
+    paused_s = 0.0
+    for g0, g1 in gaps:
+        for i in range(len(seq) - 1):
+            if seq[i]["core_local"][0] <= g0 and g1 <= seq[i + 1]["core_local"][0] + 0.25:
+                paused_s += min(g1, seq[i + 1]["core_local"][0]) - g0
+                if seq[i]["ayah"] == seq[i + 1]["ayah"]:
+                    inside += 1
+                    off_waqf += int(not any(c in WAQF_SIGNS for c in seq[i]["text"]))
+                break
+    art = None
+    if len(seq) >= 2:
+        span = seq[-1]["core_local"][0] - seq[0]["core_local"][0] - paused_s
+        if span > 0.3:
+            art = sum(checks.moras(w["text"]) for w in seq[:-1]) / span
+    report["fluency"] = {"unitsPerSecond": None if art is None else round(art, 2), "pausesInsideAyahs": inside,
+                         "pausesOffWaqfMarks": off_waqf,
+                         "repeats": sum(1 for f in findings if f["kind"] == "extra_word")}
+    report["ruleStats"] = rule_stats
 
     # ---- summary
     prog("summary", 90)

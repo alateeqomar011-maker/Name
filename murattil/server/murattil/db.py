@@ -96,7 +96,30 @@ CREATE TABLE IF NOT EXISTS practice (
   created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS practice_user ON practice(user_id, created_at);
+CREATE TABLE IF NOT EXISTS technique (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  surah INTEGER NOT NULL, ayah_from INTEGER NOT NULL, ayah_to INTEGER NOT NULL,
+  reciter_id TEXT NOT NULL,
+  job_id TEXT,
+  recording_id TEXT,
+  overall INTEGER,
+  scores TEXT,
+  pace_ratio REAL,
+  created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS technique_user ON technique(user_id, created_at);
 """
+
+# columns added after the first release: (table, column, type)
+MIGRATIONS = [("practice", "details", "TEXT")]
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    for table, column, typ in MIGRATIONS:
+        cols = {r[1] for r in c.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {typ}")
 
 _local = threading.local()
 _init_lock = threading.Lock()
@@ -116,6 +139,7 @@ def conn() -> sqlite3.Connection:
         with _init_lock:
             if not _initialised:
                 c.executescript(SCHEMA)
+                _migrate(c)
                 _initialised = True
         _local.conn = c
     return c

@@ -92,6 +92,8 @@ class Settings:
     ) + tuple(f"server{i}.mp3quran.net" for i in range(1, 17)))
     http_timeout: float = field(default_factory=lambda: float(os.environ.get("MURATTIL_HTTP_TIMEOUT", "20")))
     admin_token: str | None = field(default_factory=lambda: os.environ.get("MURATTIL_ADMIN_TOKEN") or None)
+    # Load the speech-recognition model in the background at startup.
+    warm_up: bool = field(default_factory=lambda: _env_bool("MURATTIL_WARM_UP", True))
 
     @property
     def db_path(self) -> Path:

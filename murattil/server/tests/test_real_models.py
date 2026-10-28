@@ -84,3 +84,35 @@ def test_real_engine_blend(real_models, monkeypatch):
     assert r["engine"] == "blend" and r["neural"]["used"] and r["neural"]["blend"] <= engine.BLEND_CAP
     assert r["identity"]["passed"] is True
     assert "AI voice blend" in r["label"]["en"]
+
+
+@pytest.mark.skipif(not HAVE_ASR, reason="Quran ASR model not installed")
+def test_real_technique_measures_a_slower_recitation(real_models):
+    """The same recitation slowed to 0.8x must measure ~0.8x the pace with the same melody."""
+    import librosa
+    from murattil.voice import technique
+    y = load("synthetic_fatiha_1_5.flac")
+    same = technique.compare(y, y, 1, 1, 5, {"en": "Ref", "ar": "المرجع"})
+    assert same["scores"]["pace"] == 100 and same["scores"]["melody"] == 100
+    slow = librosa.effects.time_stretch(y, rate=0.8)
+    r = technique.compare(slow, y, 1, 1, 5, {"en": "Ref", "ar": "المرجع"})
+    assert 0.72 <= r["pacing"]["ratio"] <= 0.9
+    assert r["scores"]["melody"] >= 75
+    assert r["wordsCompared"] >= r["wordsTotal"] // 2 and any(t["key"] == "pace" for t in r["tips"])
+    assert all(w["userSeg"] and w["refSeg"] for w in r["words"] if w["usable"])
+
+
+@pytest.mark.skipif(not HAVE_ASR, reason="Quran ASR model not installed")
+def test_real_segmentation_of_a_continuous_recitation(real_models):
+    """Ayah boundaries found in one continuous recording are in order and cover the recording."""
+    import numpy as np
+    from murattil.tajweed import segment
+    y = load("synthetic_fatiha_1_5.flac")
+    # remove the pauses between ayahs entirely: the segmenter must still find the ayahs from the words
+    from murattil.audio.vad import speech_segments
+    y = np.concatenate([y[int(a * 16000):int(b * 16000)] for a, b in speech_segments(y, 16000, min_silence=0.3)])
+    segs = segment.segment(y, [(1, a) for a in range(1, 6)])
+    assert [s["ayah"] for s in segs] == [1, 2, 3, 4, 5]
+    assert all(s["reliable"] for s in segs)
+    assert all(segs[i]["end"] <= segs[i + 1]["start"] + 1e-6 for i in range(4))
+    assert segs[0]["start"] < 0.5 and segs[-1]["end"] > y.size / 16000 - 1.0

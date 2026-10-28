@@ -24,13 +24,12 @@ import numpy as np
 from ..audio import analysis, world
 from ..audio.vad import pauses, trim
 from ..tajweed import asr, checks
-from ..tajweed.coach import CoachError, align_words, passage_with_rules
+from ..tajweed.coach import WAQF_SIGNS, CoachError, align_words, passage_with_rules
 
 SR = 16000
 POINTS = 8          # pitch samples per word in the contour data
 MIN_CONF = 0.35     # words aligned less confidently than this in either recording are left out
 MIN_PAUSE = 0.3     # seconds of silence that count as a pause (a stop or a breath)
-WAQF_SIGNS = set("ۖۗۘۙۚۛۜ")
 MADD_RULES = {"madd-muttasil": (4, 5), "madd-munfasil": (4, 5), "madd-lazim-kalimi-muthaqqal": (6, 6),
               "madd-lazim-kalimi-mukhaffaf": (6, 6), "madd-tabee-kalimi": (2, 2)}
 
@@ -40,7 +39,7 @@ class TechniqueUnavailable(RuntimeError):
 
 
 def _side(model, y: np.ndarray, surah: int, a_from: int, a_to: int) -> dict:
-    y, _ = trim(y, SR)
+    y, off = trim(y, SR)
     al = align_words(model, y, surah, a_from, a_to, passage_with_rules(surah, a_from, a_to))
     words = [w for w in al["words"] if w["ayah"] > 0]
     f0, _ = world.f0_only(y.astype(np.float64), SR, accurate=True)
@@ -48,7 +47,7 @@ def _side(model, y: np.ndarray, surah: int, a_from: int, a_to: int) -> dict:
     med = float(np.median(st[voiced])) if voiced.any() else 0.0
     feats = checks.frame_features(y)
     unit, basis = checks.harakah_unit(feats, [w for w in words if w.get("seg_local") and w["confidence"] >= 0.5])
-    return {"y": y, "dur": y.size / SR, "words": words, "st": st, "voiced": voiced, "median": med,
+    return {"y": y, "off": off, "dur": y.size / SR, "words": words, "st": st, "voiced": voiced, "median": med,
             "gaps": pauses(y, SR, MIN_PAUSE), "feats": feats, "unit": unit, "unitBasis": basis}
 
 
@@ -111,6 +110,13 @@ def _phrases(side: dict) -> list[float]:
     return [x for x in out if x > 0]
 
 
+def _seg(side: dict, w: dict) -> list[float] | None:
+    """Word extent in seconds of the original (untrimmed) recording, for playback."""
+    if not w.get("seg_local"):
+        return None
+    return [round(side["off"] + w["seg_local"][0], 3), round(side["off"] + w["seg_local"][1], 3)]
+
+
 def _madd_seconds(side: dict, w: dict) -> float | None:
     if not w.get("seg_local"):
         return None
@@ -132,13 +138,18 @@ def _closeness(ratio: float, k: float = 2.5) -> int:
     return int(round(100 * math.exp(-abs(math.log(max(ratio, 1e-3))) * k)))
 
 
-def compare(user16: np.ndarray, ref16: np.ndarray, surah: int, a_from: int, a_to: int, reciter_name: dict) -> dict:
+def compare(user16: np.ndarray, ref16: np.ndarray, surah: int, a_from: int, a_to: int, reciter_name: dict,
+            progress=None) -> dict:
+    prog = progress or (lambda s, p: None)
     try:
         model = asr.load()
     except asr.AsrUnavailable as e:
         raise TechniqueUnavailable("Technique comparison needs the Quran speech-recognition model, which is not installed on this server.") from e
+    prog("your recitation", 40)
     u = _side(model, user16, surah, a_from, a_to)
+    prog("reference recitation", 60)
     r = _side(model, ref16, surah, a_from, a_to)
+    prog("comparison", 80)
     name_en, name_ar = reciter_name["en"], reciter_name["ar"]
     words = []
     pu, pr = _pauses_after(u), _pauses_after(r)
@@ -149,6 +160,7 @@ def compare(user16: np.ndarray, ref16: np.ndarray, surah: int, a_from: int, a_to
             "i": i, "ayah": wu["ayah"], "word": wu["word"], "text": wu["text"], "usable": bool(usable),
             "user": _word_pitch(u, wu) if usable else [None] * POINTS,
             "ref": _word_pitch(r, wr) if usable else [None] * POINTS,
+            "userSeg": _seg(u, wu), "refSeg": _seg(r, wr),
             "userPauseAfter": pu.get(i), "refPauseAfter": pr.get(i),
             "waqfAfter": any(c in WAQF_SIGNS for c in wu["text"]),
             "ayahEnd": i == len(u["words"]) - 1 or u["words"][i + 1]["ayah"] != wu["ayah"],
