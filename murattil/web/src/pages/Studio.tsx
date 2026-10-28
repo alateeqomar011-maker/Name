@@ -5,8 +5,9 @@ import { CompareBars } from '../components/CompareBars';
 import { IDownload, IPlay, IShield, ISliders, ISparkle, IWave } from '../components/Icons';
 import { PassagePicker, ReciterGrid, useReciters, type Passage } from '../components/Pickers';
 import { RecordingInput } from '../components/Recorder';
+import { TechniqueResult } from '../components/Technique';
 import { ErrorBox, JobProgress, Notice } from '../components/ui';
-import { api, type CompareReport, type EngineStatus, type TransformReport, type UserRecording } from '../lib/api';
+import { api, type CompareReport, type EngineStatus, type TechniqueReport, type TransformReport, type UserRecording } from '../lib/api';
 import { useI18n, type Key } from '../lib/i18n';
 import { cancelJob, useJob } from '../lib/jobs';
 import { pickRecording, usePlayer } from '../lib/player';
@@ -42,7 +43,11 @@ export function StudioPage() {
   const { reciters, error: recErr, reload } = useReciters();
   const player = usePlayer();
   const [rec, setRec] = useState<UserRecording | null>(null);
-  const [passage, setPassage] = useState<Passage | null>(null);
+  const [passage, setPassage] = useState<Passage | null>(() => {
+    const ps = Number(params.get('s'));
+    const pf = Number(params.get('from'));
+    return ps && pf ? { surah: ps, from: pf, to: Number(params.get('to')) || pf } : null;
+  });
   const [reciterId, setReciterId] = useState<string | null>(params.get('reciter'));
   const [recKey, setRecKey] = useState<string | undefined>();
   const [engines, setEngines] = useState<EngineStatus | null>(null);
@@ -53,9 +58,12 @@ export function StudioPage() {
   const [compareId, setCompareId] = useState<string | null>(null);
   const [transformId, setTransformId] = useState<string | null>(null);
   const [submitErr, setSubmitErr] = useState<string | null>(null);
+  const [techId, setTechId] = useState<string | null>(null);
+  const [techErr, setTechErr] = useState<string | null>(null);
 
   const compare = useJob<CompareReport>(compareId, () => refresh());
   const transform = useJob<TransformReport>(transformId, () => refresh());
+  const tech = useJob<TechniqueReport>(techId, () => refresh());
   const suggested = compare.job?.status === 'done' ? compare.job.result?.suggested ?? null : null;
 
   useEffect(() => {
@@ -77,6 +85,7 @@ export function StudioPage() {
 
   // Reset results when inputs change
   useEffect(() => { setCompareId(null); setOverride(null); }, [rec?.id, reciterId]);
+  useEffect(() => { setTechId(null); setTechErr(null); }, [rec?.id, reciterId, passage?.surah, passage?.from, passage?.to]);
 
   const reciter = reciters?.find((r) => r.id === reciterId) ?? null;
   const refRec = reciter ? pickRecording(reciter, recKey) : null;
@@ -116,6 +125,20 @@ export function StudioPage() {
       setTransformId(j.id);
       refresh();
     } catch (e: any) { setSubmitErr(e?.message === 'network' ? t('error_network') : e?.message); }
+  };
+
+  const techBusy = tech.job && (tech.job.status === 'queued' || tech.job.status === 'running');
+  const techTooLong = !!passage && passage.to - passage.from > 9;
+  const startTechnique = async () => {
+    if (!rec || !reciterId || !passage) return;
+    setTechErr(null);
+    try {
+      const j = await api.post<{ id: string }>('/api/voice/technique', {
+        recordingId: rec.id, reciterId, surah: passage.surah, ayahFrom: passage.from, ayahTo: passage.to, recordingKey: refRec?.key,
+      });
+      setTechId(j.id);
+      refresh();
+    } catch (e: any) { setTechErr(e?.message === 'network' ? t('error_network') : e?.message); }
   };
 
   const listenReference = () => {
@@ -264,6 +287,34 @@ export function StudioPage() {
           {transform.error && <ErrorBox error={transform.error} />}
         </section>
       </div>
+
+      {/* technique: measured against the reciter reciting the same passage */}
+      <section className="card stack" id="technique">
+        <div className="card-head" style={{ marginBottom: 0 }}>
+          <h2>{t('tech_title', { name: reciter ? pick(reciter.name) : t('reciter') })}</h2>
+        </div>
+        <p className="muted" style={{ margin: 0 }}>{t('tech_intro')}</p>
+        {!passage && <Notice kind="warn">{t('tech_needs_passage')}</Notice>}
+        {techTooLong && <Notice kind="warn">{t('tech_too_long')}</Notice>}
+        <div className="row">
+          <button className="btn gold" onClick={startTechnique} disabled={!rec || !reciter || !passage || techTooLong || !!techBusy}>
+            {techBusy ? <><span className="spinner" />{t('tech_measuring')}</> : <><IWave />{t('tech_start')}</>}
+          </button>
+          {session && <span className="faint">{t('allowance_analyses')}: {session.usage.analysis.used}/{session.usage.analysis.limit}</span>}
+        </div>
+        {techErr && <Notice kind="err">{techErr}</Notice>}
+        {techBusy && <JobProgress job={tech.job} onCancel={() => techId && cancelJob(techId)} />}
+        {tech.job?.status === 'failed' && <Notice kind="err"><b>{t('job_failed')}.</b> {tech.job.error}</Notice>}
+        {tech.error && <ErrorBox error={tech.error} />}
+      </section>
+      {tech.job?.status === 'done' && tech.job.result && rec && (
+        <TechniqueResult report={tech.job.result} recording={rec} onRecordAgain={() => {
+          setRec(null);
+          setTechId(null);
+          setTransformId(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }} />
+      )}
 
       {transform.job?.status === 'done' && transform.job.result && rec && transform.job.outputRecordingId && (
         <StudioResult report={transform.job.result} original={rec} outputId={transform.job.outputRecordingId} />

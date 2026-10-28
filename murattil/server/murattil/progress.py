@@ -298,8 +298,9 @@ def plan(user_id: str) -> dict:
         length = r["ayah_to"] - r["ayah_from"] + 1
         if r["ayah_to"] < n_ayahs:
             s, a0, a1 = r["surah"], r["ayah_to"] + 1, min(n_ayahs, r["ayah_to"] + length)
-        else:
-            s, a0, a1 = DAILY_PASSAGES[today.toordinal() % len(DAILY_PASSAGES)]
+        else:  # finished the surah: the start of the next one, in mushaf order
+            s = r["surah"] % 114 + 1
+            a0, a1 = 1, min(quran.surah_meta(s)["ayahs"], length)
         items.append({"id": "continue", "type": "continue", "surah": s, "from": a0, "to": a1,
                       "titleEn": f"Continue: {_passage_name(s, a0, a1)['en']}", "titleAr": f"تابع: {_passage_name(s, a0, a1)['ar']}",
                       "detailEn": "The next passage after your last practice.", "detailAr": "المقطع التالي بعد آخر تدريب لك.",
@@ -312,4 +313,9 @@ def plan(user_id: str) -> dict:
                       "detailEn": "Record it in the Tajweed Coach. Your plan is built from your results, so it starts after your first attempt.",
                       "detailAr": "سجّله في مدرب التجويد. تُبنى خطتك من نتائجك، فتبدأ بعد أول محاولة.",
                       "done": d["completed"]})
+    for it in items:  # Arabic text with Arabic-Indic digits, as in the rest of the Arabic interface
+        it["titleAr"], it["detailAr"] = it["titleAr"].translate(AR_DIGITS), it["detailAr"].translate(AR_DIGITS)
     return {"date": today.isoformat(), "items": items, "basedOn": {"attempts": len(rows), "techniqueComparisons": len(tech)}}
+
+
+AR_DIGITS = str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩")

@@ -162,7 +162,7 @@ export interface UserRecording {
 
 export interface Job<R = any> {
   id: string;
-  kind: 'transform' | 'tajweed' | 'compare';
+  kind: 'transform' | 'tajweed' | 'compare' | 'technique' | 'segment';
   status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
   stage: string;
   progress: number;
@@ -184,6 +184,8 @@ export interface Finding {
   ar: string;
   tipEn: string;
   tipAr: string;
+  stepsEn?: string[];
+  stepsAr?: string[];
   measured: Record<string, any>;
   surah?: number;
   ayah?: number;
@@ -220,7 +222,80 @@ export interface CoachReport {
   asr: { available: boolean; reason: string | null; name: string };
   recognized?: string;
   processingSeconds: number;
+  fluency?: { unitsPerSecond: number | null; pausesInsideAyahs: number; pausesOffWaqfMarks: number; repeats: number };
+  attempt?: AttemptComparison | null;
 }
+
+export interface AttemptWord { ayah: number; word: number; text: string }
+
+export interface AttemptComparison {
+  previousAt: number;
+  fixed: AttemptWord[];
+  still: AttemptWord[];
+  new: AttemptWord[];
+  deltas: { wordAccuracy: number | null; meanConfidence: number | null; unitsPerSecond: number | null; pausesOffWaqfMarks: number | null; repeats: number | null };
+  rules: Record<string, { before: number; after: number }>;
+}
+
+export type TechniqueScoreKey = 'pace' | 'breath' | 'melody' | 'madd' | 'tone';
+
+export interface TechniqueWord {
+  i: number;
+  ayah: number;
+  word: number;
+  text: string;
+  usable: boolean;
+  user: (number | null)[];
+  ref: (number | null)[];
+  userSeg: [number, number] | null;
+  refSeg: [number, number] | null;
+  userPauseAfter: number | null;
+  refPauseAfter: number | null;
+  waqfAfter: boolean;
+  ayahEnd: boolean;
+  madd?: { rule: string; userSeconds: number; refSeconds: number; userCounts: number | null; refCounts: number | null };
+}
+
+export interface TechniqueReport {
+  scores: Record<TechniqueScoreKey, number | null>;
+  overall: number | null;
+  pacing: { userRate: number | null; refRate: number | null; ratio: number | null; ayahs: { ayah: number; userSeconds: number; refSeconds: number }[] };
+  breath: { userLongestPhrase: number; refLongestPhrase: number; userMidAyahPauses: number; refMidAyahPauses: number; sharedPauses: number;
+    userAyahEndPauses: number; refAyahEndPauses: number; ayahBoundaries: number };
+  melody: { correlation: number | null; wordCorrelation: number | null; userRangeSt: number; refRangeSt: number; cadences: { ayah: number; user: number; ref: number }[] };
+  madd: NonNullable<TechniqueWord['madd']>[];
+  tone: { user: Descriptors | null; reference: Descriptors | null; notes: { key: string; en: string; ar: string }[] };
+  harakah: { userSeconds: number | null; refSeconds: number | null };
+  words: TechniqueWord[];
+  tips: { key: string; en: string; ar: string }[];
+  wordsCompared: number;
+  wordsTotal: number;
+  reciter: { id: string; name: { en: string; ar: string } };
+  passage: { surah: number; from: number; to: number };
+  recordingId: string;
+  reference: { recording: string | null; audio: string };
+  previous: { overall: number | null; scores: Record<TechniqueScoreKey, number | null>; at: number } | null;
+}
+
+export interface PlanItem {
+  id: string;
+  type: 'fix' | 'rule' | 'imitate' | 'review' | 'continue' | 'start';
+  surah: number;
+  from: number;
+  to: number;
+  titleEn: string;
+  titleAr: string;
+  detailEn: string;
+  detailAr: string;
+  done: boolean;
+  words?: AttemptWord[];
+  hukm?: string;
+  reciterId?: string;
+  focus?: TechniqueScoreKey | null;
+  score?: number | null;
+}
+
+export interface Plan { date: string; items: PlanItem[]; basedOn: { attempts: number; techniqueComparisons: number } }
 
 export type Descriptors = Record<string, number | null>;
 

@@ -476,3 +476,43 @@ table.list td { padding: 10px 8px; border-bottom: 1px solid var(--border); }
 @media (max-width: 900px) { .toast { bottom: calc(140px + env(safe-area-inset-bottom)); } }
 
 :root[dir='rtl'] .flip { transform: scaleX(-1); }
+
+/* ---------------------------------------------------------------- technique, plan, attempts */
+.quran-inline { font-family: 'KFGQPC Hafs', Amiri, serif; font-size: 1.25rem; line-height: 1.9; }
+button.quran-inline { background: none; border: 0; padding: 0 2px; color: var(--text); cursor: pointer; }
+button.quran-inline:hover { color: var(--accent); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; cursor: default; }
+.chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; cursor: default; }
+.chip.err { background: var(--danger-soft); color: var(--danger); border-color: transparent; cursor: default; }
+.chip.quran-inline { padding: 0 10px; font-size: 1.05rem; line-height: 1.8; }
+.attempt-card { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; background: var(--bg-sunken); }
+ol.tips, ol.steps-list { margin: 0; padding-inline-start: 22px; display: grid; gap: 6px; }
+ol.steps-list { margin-top: 8px; }
+ol.plan { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; counter-reset: plan; }
+ol.plan li { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; counter-increment: plan; }
+ol.plan li::before { content: counter(plan); display: grid; place-items: center; width: 28px; height: 28px; flex: none; border-radius: 999px; background: var(--gold-soft); color: var(--gold-600); font-weight: 700; }
+ol.plan li.done { opacity: 0.7; }
+ol.plan li.done::before { content: '✓'; background: var(--ok-soft); color: var(--ok); }
+.icon-btn.xs { width: 24px; height: 24px; }
+.icon-btn.xs svg { width: 11px; height: 11px; }
+.icon-btn.xs.you { color: var(--accent); }
+.icon-btn.xs.ref { color: var(--gold-600); }
+:root[data-theme='dark'] .icon-btn.xs.ref { color: var(--gold-400); }
+.melody-scroll { overflow-x: auto; padding-bottom: 4px; }
+.chart.melody { width: auto; height: 160px; display: block; }
+.chart .you-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.chart .ref-line { fill: none; stroke: var(--gold); stroke-width: 2.5; stroke-dasharray: 5 4; stroke-linecap: round; }
+.chart .faint-line { opacity: 0.45; }
+.chart .sel { fill: var(--gold-soft); }
+.melody-words { display: flex; }
+.melody-words .mw { flex: none; text-align: center; border-radius: 8px; }
+.melody-words .mw.on { background: var(--gold-soft); }
+.melody-words .quran-inline { font-size: 1.05rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.key-line { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--accent); }
+.key-line.ref { border-top: 3px dashed var(--gold); }
+.breath-map { line-height: 2.2; }
+.breath-map .bw { white-space: nowrap; }
+.breath-map .marks { display: inline-flex; gap: 2px; vertical-align: middle; margin: 0 2px; }
+.mk { display: inline-block; width: 4px; height: 18px; border-radius: 2px; }
+.mk.you { background: var(--accent); }
+.mk.ref { background: var(--gold); }

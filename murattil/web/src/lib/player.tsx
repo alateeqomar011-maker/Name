@@ -29,6 +29,7 @@ interface PlayerState {
   repeatRange: number; // total plays of the range; 0 = endless
   mode: 'ayah' | 'surah' | null;
   timed: boolean;
+  canCompute: boolean; // a full-surah recording without timings whose ayah boundaries the server can compute
 }
 
 interface PlayerApi extends PlayerState {
@@ -46,7 +47,7 @@ const Ctx = createContext<PlayerApi | null>(null);
 
 const initial: PlayerState = {
   reciter: null, recording: null, surah: null, from: 1, to: 1, ayah: null, playing: false, loading: false,
-  error: false, rate: 1, repeatAyah: 1, repeatRange: 1, mode: null, timed: false,
+  error: false, rate: 1, repeatAyah: 1, repeatRange: 1, mode: null, timed: false, canCompute: false,
 };
 
 export function pickRecording(rec: Reciter, key?: string): Recording | null {
@@ -170,18 +171,20 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const mode = recording.kind;
     const start = r.start ?? r.from;
     let timed = false;
+    let canCompute = false;
     if (mode === 'surah') {
       try {
-        const t = await api.get<{ timings: { ayah: number; start: number; end: number }[] | null }>(`/api/reciters/${rec.id}/timings?surah=${r.surah}`);
+        const t = await api.get<{ timings: { ayah: number; start: number; end: number }[] | null; canCompute?: boolean }>(`/api/reciters/${rec.id}/timings?surah=${r.surah}`);
         timings.current = t.timings;
         timed = !!t.timings?.length;
+        canCompute = !timed && !!t.canCompute;
       } catch {
         timings.current = null;
       }
     }
     const next: PlayerState = {
       ...s.current, reciter: rec, recording, surah: r.surah, from: r.from, to: r.to, ayah: timed || mode === 'ayah' ? start : null,
-      mode, timed, error: false, loading: true,
+      mode, timed, canCompute, error: false, loading: true,
     };
     s.current = next;
     setSt(next);

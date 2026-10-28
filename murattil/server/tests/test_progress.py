@@ -109,3 +109,10 @@ def test_migration_adds_columns_to_an_old_database(tmp_path):
     db._migrate(c)
     assert "details" in {r[1] for r in c.execute("PRAGMA table_info(practice)")}
     db._migrate(c)  # idempotent
+
+
+def test_continue_moves_to_the_next_surah_after_the_last_ayah():
+    c = client()
+    _practice(_uid(c), 103, 3, 3, _details(["ok"] * 9), db.now() - 60)
+    nxt = next(i for i in c.get("/api/plan").json()["items"] if i["type"] == "continue")
+    assert (nxt["surah"], nxt["from"], nxt["to"]) == (104, 1, 1)

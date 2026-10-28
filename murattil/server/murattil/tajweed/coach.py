@@ -220,7 +220,9 @@ WAQF_SIGNS = set("ۖۗۘۙۚۛۜ")
 
 # Acoustic tajweed checks that are reported. A check stays off when, measured on professional
 # recitations, it fires too often on correct recitation to be trusted (it is still measured).
-CHECKS = {"madd": True, "ghunnah": False, "qalqalah": True, "waqf_midword": True}
+# qalqalah: "missing" on 77% of professional qalqalahs (room reverb fills the closure) — off.
+# ghunnah: "short" on 98% of professional ghunnahs — off.
+CHECKS = {"madd": True, "ghunnah": False, "qalqalah": False, "waqf_midword": True}
 MADD_SHORT, MADD_LONG = 0.65, 1.7       # flag a madd held below/above this share of its required counts
 
 
@@ -518,7 +520,8 @@ def _public_words(words: list[dict]) -> list[dict]:
     for w in words:
         out.append({"surah": w["surah"], "ayah": w["ayah"], "word": w["word"], "text": w["text"],
                     "status": w.get("status", "unchecked"), "confidence": round(w.get("confidence", 0.0), 2),
-                    "seg": w.get("seg"), "core": w.get("core"), "heard": w.get("heard"), "rules": sorted(w["rules"])})
+                    "seg": w.get("seg"), "core": w.get("core"), "heard": w.get("heard"), "textCost": w.get("textCost"),
+                    "rules": sorted(w["rules"])})
     return out
 
 

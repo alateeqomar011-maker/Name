@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { api } from '../lib/api';
 import { useI18n, type Key } from '../lib/i18n';
+import { useJob } from '../lib/jobs';
 import { usePlayer } from '../lib/player';
 import { useSession } from '../lib/session';
 import { useSurahs } from './Pickers';
@@ -93,6 +95,23 @@ function MiniPlayer() {
   const p = usePlayer();
   const { t, pick, num, lang } = useI18n();
   const surahs = useSurahs();
+  const [segJob, setSegJob] = useState<string | null>(null);
+  const [segErr, setSegErr] = useState<string | null>(null);
+  const seg = useJob(segJob, (j) => {
+    if (j.status === 'done' && p.reciter && p.surah) {
+      p.play({ reciterId: p.reciter.id, recordingKey: p.recording?.key, surah: p.surah, from: p.from, to: p.to });
+    }
+    setSegJob(null);
+    if (j.status === 'failed') setSegErr(j.error);
+  });
+  const findTimings = async () => {
+    if (!p.reciter || !p.surah) return;
+    setSegErr(null);
+    try {
+      const j = await api.post<{ id: string }>(`/api/reciters/${p.reciter.id}/timings?surah=${p.surah}`);
+      setSegJob(j.id);
+    } catch (e: any) { setSegErr(e?.message); }
+  };
   if (!p.reciter || !p.surah) return null;
   const sm = surahs?.[p.surah - 1];
   return (
@@ -109,7 +128,12 @@ function MiniPlayer() {
         <span>
           {sm ? (lang === 'ar' ? sm.ar : sm.en) : ''} {p.ayah ? `· ${t('ayah')} ${num(p.ayah)}` : `· ${t('full_surah')}`}
           {p.error && <span style={{ color: 'var(--danger)' }}> · {t('player_error')}</span>}
+          {segErr && <span style={{ color: 'var(--danger)' }}> · {segErr}</span>}
         </span>
+        {p.mode === 'surah' && !p.timed && p.canCompute && (
+          seg.job ? <span className="small"><span className="spinner" /> {t('finding_timings')} {num(seg.job.progress)}%</span>
+            : <button className="btn sm ghost" onClick={findTimings} title={t('find_timings_help')}>{t('find_timings')}</button>
+        )}
       </div>
       <div className="row" style={{ gap: 6 }}>
         <div className="opts">

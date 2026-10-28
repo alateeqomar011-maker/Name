@@ -17,6 +17,7 @@ import numpy as np
 
 HOP = 0.01
 SR = 16000
+STEADY = 1.0   # a held vowel's frames change less than the recording's median voiced frame
 
 SHORT_VOWELS = set("َُِ")
 TANWEEN = set("ًࣰٌࣱٍࣲ")
@@ -30,7 +31,8 @@ class Frames:
     voiced: np.ndarray
     low_ratio: np.ndarray   # share of 0–4 kHz energy below 500 Hz
     centroid: np.ndarray
-    flux: np.ndarray        # spectral change between frames (0..~2)
+    flux: np.ndarray        # spectral change between frames, on smoothed (mel-band) spectra
+    flux_ref: float         # median flux of this recording's voiced frames: "steady" is judged against it
 
 
 def frame_features(y: np.ndarray, sr: int = SR) -> Frames:
@@ -47,15 +49,22 @@ def frame_features(y: np.ndarray, sr: int = SR) -> Frames:
     band = spec[:, freqs < 4000]
     low = spec[:, freqs < 500].sum(axis=1) / (band.sum(axis=1) + 1e-10)
     cen = (spec[:, freqs < 4000] * freqs[freqs < 4000]).sum(axis=1) / (band.sum(axis=1) + 1e-10)
-    logspec = np.log(spec[:, freqs < 4000] + 1e-8)
-    norm = logspec - logspec.mean(axis=1, keepdims=True)
-    flux = np.concatenate([[0.0], np.sqrt(np.mean(np.diff(norm, axis=0) ** 2, axis=1))])
+    # Spectral change is measured on 24 mel bands (a per-bin log spectrum changes too much from frame
+    # to frame on real recordings to tell a held vowel from a transition), over +-1 frame.
+    from librosa.filters import mel
+    bands = np.log(spec @ mel(sr=sr, n_fft=512, n_mels=24, fmax=4000).T + 1e-8)
+    bands -= bands.mean(axis=1, keepdims=True)
+    flux = np.zeros(n)
+    if n > 2:
+        flux[1:-1] = np.sqrt(np.mean(((bands[2:] - bands[:-2]) / 2) ** 2, axis=1))
+        flux[0], flux[-1] = flux[1], flux[-2]
     f0, _ = world.f0_only(y.astype(np.float64), sr, accurate=False)
     # WORLD frames are 5 ms; take every other one to match the 10 ms grid
     v = f0[::2][:n] > 0
     if v.size < n:
         v = np.pad(v, (0, n - v.size))
-    return Frames(energy_db=e, voiced=v, low_ratio=low, centroid=cen, flux=flux)
+    ref = float(np.median(flux[v])) if v.any() else float(np.median(flux))
+    return Frames(energy_db=e, voiced=v, low_ratio=low, centroid=cen, flux=flux, flux_ref=max(ref, 1e-3))
 
 
 def _longest_run(mask: np.ndarray, max_gap: int = 2) -> tuple[int, int]:
@@ -90,7 +99,9 @@ def sustained_vowel_span(f: Frames, a: int, b: int) -> tuple[int, int]:
     if b - a < 3:
         return a, 0
     e = f.energy_db[a:b]
-    m = f.voiced[a:b] & (e > e.max() - 14) & (f.flux[a:b] < 0.9) & (f.low_ratio[a:b] < 0.85)
+    # voiced, loud and steadier than this recording's typical voiced frame (vowels ī and ū have most
+    # of their energy below 500 Hz, so the low-frequency share is not used here)
+    m = f.voiced[a:b] & (e > e.max() - 14) & (f.flux[a:b] < STEADY * f.flux_ref)
     start, length = _longest_run(m)
     return a + start, length
 
@@ -105,7 +116,7 @@ def nasal_murmur(f: Frames, a: int, b: int) -> float:
         return 0.0
     e = f.energy_db[a:b]
     m = (f.voiced[a:b] & (f.low_ratio[a:b] > 0.6) & (f.centroid[a:b] < 900) & (e > e.max() - 25)
-         & (f.flux[a:b] < 1.0))
+         & (f.flux[a:b] < 1.2 * f.flux_ref))
     return _longest_run(m, max_gap=1)[1] * HOP
 
 

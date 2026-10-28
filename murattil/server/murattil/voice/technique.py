@@ -145,11 +145,11 @@ def compare(user16: np.ndarray, ref16: np.ndarray, surah: int, a_from: int, a_to
         model = asr.load()
     except asr.AsrUnavailable as e:
         raise TechniqueUnavailable("Technique comparison needs the Quran speech-recognition model, which is not installed on this server.") from e
-    prog("your recitation", 40)
+    prog("technique_user", 40)
     u = _side(model, user16, surah, a_from, a_to)
-    prog("reference recitation", 60)
+    prog("technique_reference", 60)
     r = _side(model, ref16, surah, a_from, a_to)
-    prog("comparison", 80)
+    prog("technique_compare", 80)
     name_en, name_ar = reciter_name["en"], reciter_name["ar"]
     words = []
     pu, pr = _pauses_after(u), _pauses_after(r)

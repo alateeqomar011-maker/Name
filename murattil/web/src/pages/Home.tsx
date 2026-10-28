@@ -4,27 +4,32 @@ import { IArrow, IBook, IMic, IShield, IWave } from '../components/Icons';
 import { useReciters } from '../components/Pickers';
 import { AyahText } from '../components/QuranText';
 import { Monogram } from '../components/ui';
-import { api, type Ayah, type EngineStatus } from '../lib/api';
+import { api, type Ayah, type EngineStatus, type Plan, type PlanItem } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { getSurah } from '../lib/quran';
 import { useSession } from '../lib/session';
 
-interface Daily { date: string; surah: number; from: number; to: number; surahName: { ar: string; en: string }; completed: boolean; attemptsToday: number }
+export function planLink(i: PlanItem): string {
+  if (i.type === 'imitate' && i.reciterId) return `/studio?reciter=${i.reciterId}&s=${i.surah}&from=${i.from}&to=${i.to}#technique`;
+  return `/coach?s=${i.surah}&from=${i.from}&to=${i.to}`;
+}
 
 export function HomePage() {
   const { t, pick, num } = useI18n();
   const { session, favorites } = useSession();
   const { reciters } = useReciters();
-  const [daily, setDaily] = useState<Daily | null>(null);
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [planErr, setPlanErr] = useState(false);
   const [first, setFirst] = useState<Ayah | null>(null);
   const [engines, setEngines] = useState<EngineStatus | null>(null);
   const [asr, setAsr] = useState<{ available: boolean } | null>(null);
 
   useEffect(() => {
-    api.get<Daily>('/api/daily').then((d) => {
-      setDaily(d);
-      getSurah(d.surah).then((s) => setFirst(s.ayahs[d.from - 1])).catch(() => undefined);
-    }).catch(() => undefined);
+    api.get<Plan>('/api/plan').then((p) => {
+      setPlan(p);
+      const d = p.items.find((i) => !i.done) ?? p.items[0];
+      if (d) getSurah(d.surah).then((s) => setFirst(s.ayahs[d.from - 1])).catch(() => undefined);
+    }).catch(() => setPlanErr(true));
     api.get<EngineStatus>('/api/voice/engines').then(setEngines).catch(() => undefined);
     api.get<{ asr: { available: boolean } }>('/api/tajweed/status').then((r) => setAsr(r.asr)).catch(() => undefined);
   }, []);
@@ -45,29 +50,62 @@ export function HomePage() {
           </div>
         </div>
         <div className="daily" aria-live="polite">
-          <div className="row between">
-            <b style={{ color: 'var(--gold-400)' }}>{t('daily_title')}</b>
-            {daily?.completed && <span className="badge ok">{t('daily_done')}</span>}
-          </div>
-          {daily ? (
-            <>
-              <div style={{ marginTop: 6, color: '#cfd7cc' }}>
-                {pick(daily.surahName)} · {num(daily.from)}–{num(daily.to)}
-              </div>
-              {first && (
-                <div className="quran" style={{ marginTop: 6, maxHeight: '6.5em', overflow: 'hidden' }}>
-                  <AyahText ayah={first} rules={null} tajweed={false} />
+          {(() => {
+            const d = plan?.items.find((i) => !i.done) ?? plan?.items[0];
+            return (
+              <>
+                <div className="row between">
+                  <b style={{ color: 'var(--gold-400)' }}>{t('daily_title')}</b>
+                  {plan && plan.items.every((i) => i.done) && <span className="badge ok">{t('daily_done')}</span>}
                 </div>
-              )}
-              <Link className="btn gold" style={{ marginTop: 12 }} to={`/coach?s=${daily.surah}&from=${daily.from}&to=${daily.to}`}>
-                {t('daily_start')} <IArrow className="flip" />
-              </Link>
-            </>
-          ) : (
-            <div className="skeleton" style={{ height: 120, marginTop: 10, opacity: 0.4 }} />
-          )}
+                {d ? (
+                  <>
+                    <div style={{ marginTop: 6, color: '#f4eedd', fontWeight: 600 }}>{pick({ en: d.titleEn, ar: d.titleAr })}</div>
+                    <div className="small" style={{ color: '#cfd7cc' }}>{pick({ en: d.detailEn, ar: d.detailAr })}</div>
+                    {first && (
+                      <div className="quran" style={{ marginTop: 6, maxHeight: '6.5em', overflow: 'hidden' }}>
+                        <AyahText ayah={first} rules={null} tajweed={false} />
+                      </div>
+                    )}
+                    <Link className="btn gold" style={{ marginTop: 12 }} to={planLink(d)}>
+                      {t('daily_start')} <IArrow className="flip" />
+                    </Link>
+                  </>
+                ) : planErr ? (
+                  <span className="small" style={{ color: '#cfd7cc' }}>{t('error_network')}</span>
+                ) : (
+                  <div className="skeleton" style={{ height: 120, marginTop: 10, opacity: 0.4 }} />
+                )}
+              </>
+            );
+          })()}
         </div>
       </section>
+
+      {plan && plan.items.length > 1 && (
+        <section className="card">
+          <div className="card-head">
+            <h2>{t('plan_title_today')}</h2>
+            <span className="faint">{t('plan_based_on', { n: num(plan.basedOn.attempts), m: num(plan.basedOn.techniqueComparisons) })}</span>
+          </div>
+          <ol className="plan">
+            {plan.items.map((i) => (
+              <li key={i.id} className={i.done ? 'done' : ''}>
+                <div className="stack" style={{ gap: 2, flex: 1, minWidth: 0 }}>
+                  <b>{pick({ en: i.titleEn, ar: i.titleAr })}</b>
+                  <span className="small muted">{pick({ en: i.detailEn, ar: i.detailAr })}</span>
+                  {i.words && i.words.length > 0 && (
+                    <div className="row" style={{ gap: 6, marginTop: 4 }}>
+                      {i.words.map((w) => <span key={`${w.ayah}:${w.word}`} className="chip warn quran-inline">{w.text}</span>)}
+                    </div>
+                  )}
+                </div>
+                {i.done ? <span className="badge ok">{t('daily_done')}</span> : <Link className="btn sm" to={planLink(i)}>{t('plan_go')}</Link>}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <section className="grid grid-3">
         <Link to="/studio" className="action-card">

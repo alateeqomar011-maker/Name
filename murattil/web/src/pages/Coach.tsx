@@ -6,7 +6,7 @@ import { PassagePicker, useReciters, type Passage } from '../components/Pickers'
 import { AyahText, TajweedLegend } from '../components/QuranText';
 import { RecordingInput } from '../components/Recorder';
 import { ErrorBox, JobProgress, Loading, Notice } from '../components/ui';
-import { api, type Ayah, type CoachReport, type CoachWord, type Finding, type Job, type Rule, type UserRecording } from '../lib/api';
+import { api, type AttemptComparison, type Ayah, type CoachReport, type CoachWord, type Finding, type Job, type Rule, type UserRecording } from '../lib/api';
 import { useI18n, type Key } from '../lib/i18n';
 import { cancelJob, useJob } from '../lib/jobs';
 import { pickRecording, usePlayer } from '../lib/player';
@@ -122,8 +122,9 @@ export function CoachPage() {
       </section>
 
       {report && ayahs && rec && (
-        <CoachResult report={report} ayahs={ayahs} rules={rules} rec={rec} onPlaySeg={(s) => handle.current?.playSegment(s[0], s[1])}
-          onPlayRefAyah={(a) => playRef(a, a)} />
+        <CoachResult report={report} ayahs={ayahs} rules={rules} rec={rec} refReciter={refReciter} onPlaySeg={(s) => handle.current?.playSegment(s[0], s[1])}
+          onPlayRefAyah={(a) => playRef(a, a)}
+          onRecordAgain={() => { setRec(null); setJobId(null); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
       )}
       {report && <Attempts passage={passage} />}
     </div>
@@ -135,8 +136,9 @@ function statusClass(w: CoachWord | undefined) {
   return `ws-${w.status}`;
 }
 
-function CoachResult({ report, ayahs, rules, rec, onPlaySeg, onPlayRefAyah }: {
-  report: CoachReport; ayahs: Ayah[]; rules: Rule[] | null; rec: UserRecording; onPlaySeg: (s: [number, number]) => void; onPlayRefAyah: (a: number) => void;
+function CoachResult({ report, ayahs, rules, rec, refReciter, onPlaySeg, onPlayRefAyah, onRecordAgain }: {
+  report: CoachReport; ayahs: Ayah[]; rules: Rule[] | null; rec: UserRecording; refReciter: string; onPlaySeg: (s: [number, number]) => void;
+  onPlayRefAyah: (a: number) => void; onRecordAgain: () => void;
 }) {
   const { t, pick, num } = useI18n();
   const words = useMemo(() => {
@@ -170,6 +172,14 @@ function CoachResult({ report, ayahs, rules, rec, onPlaySeg, onPlayRefAyah }: {
         </div>
       </div>
       {report.mode === 'limited' && <Notice kind="warn">{t('asr_unavailable')}</Notice>}
+      {report.attempt && <AttemptCard a={report.attempt} />}
+      {report.fluency && report.mode === 'full' && (
+        <div className="row small" style={{ gap: 18 }}>
+          {report.fluency.unitsPerSecond != null && <span><b>{t('fluency_pace')}:</b> {num(report.fluency.unitsPerSecond)} {t('units_per_second')}</span>}
+          <span><b>{t('fluency_pauses')}:</b> {num(report.fluency.pausesOffWaqfMarks)}</span>
+          <span><b>{t('fluency_repeats')}:</b> {num(report.fluency.repeats)}</span>
+        </div>
+      )}
       {report.quality.issues.length > 0 && (
         <Notice kind="warn"><b>{t('quality')}:</b> {report.quality.issues.map((i) => pick(i)).join(' ')}</Notice>
       )}
@@ -214,10 +224,45 @@ function CoachResult({ report, ayahs, rules, rec, onPlaySeg, onPlayRefAyah }: {
       </div>
 
       <div className="row">
+        <button className="btn gold" onClick={onRecordAgain}><IMic />{t('record_again')}</button>
+        <Link className="btn ghost" to={`/studio?recording=${rec.id}&reciter=${refReciter}#technique`}><IWave />{t('compare_technique')}</Link>
         <Link className="btn ghost" to={`/studio?recording=${rec.id}`}><IWave />{t('apply_style')}</Link>
       </div>
     </section>
   );
+}
+
+function AttemptCard({ a }: { a: AttemptComparison }) {
+  const { t, num } = useI18n();
+  const d = a.deltas;
+  const pct = (v: number | null) => (v == null ? null : Math.round(v * 100));
+  const chips = (xs: AttemptComparison['fixed'], cls: string) => xs.map((w) => (
+    <span key={`${w.ayah}:${w.word}`} className={`chip ${cls} quran-inline`} title={`${num(w.ayah)}:${num(w.word)}`}>{w.text}</span>
+  ));
+  const acc = pct(d.wordAccuracy);
+  const clar = pct(d.meanConfidence);
+  return (
+    <div className="attempt-card stack" style={{ gap: 8 }}>
+      <b>{t('since_last_attempt')} <span className="faint">({new Date(a.previousAt * 1000).toLocaleDateString()})</span></b>
+      <div className="row small" style={{ gap: 16 }}>
+        {acc != null && <span>{t('word_accuracy')}: <Delta v={acc} unit="%" /></span>}
+        {clar != null && <span>{t('clarity')}: <Delta v={clar} unit="%" /></span>}
+        {d.pausesOffWaqfMarks != null && <span>{t('fluency_pauses')}: <Delta v={-d.pausesOffWaqfMarks} raw={d.pausesOffWaqfMarks} /></span>}
+      </div>
+      {a.fixed.length > 0 && <div className="row" style={{ gap: 6 }}><span className="small"><b>{t('attempt_fixed')}:</b></span>{chips(a.fixed, 'ok')}</div>}
+      {a.still.length > 0 && <div className="row" style={{ gap: 6 }}><span className="small"><b>{t('attempt_still')}:</b></span>{chips(a.still, 'warn')}</div>}
+      {a.new.length > 0 && <div className="row" style={{ gap: 6 }}><span className="small"><b>{t('attempt_new')}:</b></span>{chips(a.new, 'err')}</div>}
+      {a.fixed.length === 0 && a.still.length === 0 && a.new.length === 0 && <span className="small muted">{t('attempt_same')}</span>}
+    </div>
+  );
+}
+
+/** A change since the last attempt; positive `v` is an improvement. `raw` is shown instead of `v` when given. */
+function Delta({ v, unit = '', raw }: { v: number; unit?: string; raw?: number }) {
+  const { num } = useI18n();
+  const shown = raw ?? v;
+  if (v === 0) return <b className="muted">±0{unit}</b>;
+  return <b style={{ color: v > 0 ? 'var(--ok)' : 'var(--warn)' }}>{shown > 0 ? '+' : '−'}{num(Math.abs(shown))}{unit}</b>;
 }
 
 function FindingCard({ f, onPlaySeg, onPlayRefAyah }: { f: Finding; onPlaySeg: (s: [number, number]) => void; onPlayRefAyah: (a: number) => void }) {
@@ -241,6 +286,12 @@ function FindingCard({ f, onPlaySeg, onPlayRefAyah }: { f: Finding; onPlaySeg: (
           </div>
         )}
         <div className="tip">{ar ? f.tipAr : f.tipEn}</div>
+        {(ar ? f.stepsAr : f.stepsEn)?.length ? (
+          <details>
+            <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>{t('how_to_fix')}</summary>
+            <ol className="steps-list small">{(ar ? f.stepsAr! : f.stepsEn!).map((x, i) => <li key={i}>{x}</li>)}</ol>
+          </details>
+        ) : null}
         {f.makhraj?.map((m) => <div key={m.letters} className="small"><b>{t('makhraj')} ({m.letters.split('').join(' ')}):</b> {ar ? m.ar : m.en}</div>)}
         <div className="row">
           {f.seg && <button className="btn sm ghost" onClick={() => onPlaySeg(f.seg!)}><IPlay />{t('play_my_word')}</button>}
