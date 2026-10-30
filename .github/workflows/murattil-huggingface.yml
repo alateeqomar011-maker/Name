@@ -1,7 +1,10 @@
 # Deploys murattil/ to a Hugging Face Space (Docker), which gives the app a public https link.
 #
+# Hugging Face requires a PRO subscription (https://huggingface.co/pro) to host Docker Spaces,
+# even on the basic CPU hardware; without it creating the Space fails with "402 Payment Required".
+#
 # One-time setup (no merge needed — this runs from the app's own branch):
-#   1. Create a Hugging Face account and an access token with "write" permission
+#   1. Create a Hugging Face account (PRO) and an access token with "write" permission
 #      (https://huggingface.co/settings/tokens).
 #   2. In this GitHub repository: Settings → Secrets and variables → Actions → New repository
 #      secret: HF_TOKEN = the token.

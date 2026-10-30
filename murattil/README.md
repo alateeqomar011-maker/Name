@@ -129,7 +129,7 @@ professional EveryAyah recording stood in for his full-surah file.
 
 | Needed | Why | Status |
 | --- | --- | --- |
-| A host with ≥ 4 GB RAM (2 vCPU is enough) | models run on the CPU | Docker image and a one-click Hugging Face Space workflow are included (below) |
+| A host with ≥ 4 GB RAM (2 vCPU is enough) | models run on the CPU | Docker image and a one-click Hugging Face Space workflow are included (below); Hugging Face needs a PRO account for Docker Spaces |
 | Outbound HTTPS to `everyayah.com` and `mp3quran.net` | reference recitations are streamed, not rehosted | Works on normal hosting. Folder names and mp3quran name matching were not checked live, because those hosts were unreachable from development. The server re-checks every source every 6 h and the UI marks unreachable ones. |
 | Model weights (~1.4 GB) | Quran recogniser and kNN-VC | Downloaded during the Docker build from the authors' GitHub releases |
 | A reciter's written consent | full voice conversion toward a specific reciter | **None registered.** Without consent the app uses a style-inspired transformation with the neural blend capped at 50 %, and says so. See "Authorised voice models". |
@@ -137,7 +137,9 @@ professional EveryAyah recording stood in for his full-surah file.
 
 ## Put it online
 
-**Hugging Face Spaces (free CPU tier, public https link)** — no merge needed:
+**Hugging Face Spaces (public https link)** — no merge needed. Hugging Face hosts Docker Spaces
+only for PRO accounts (https://huggingface.co/pro); without PRO the deploy stops with
+"402 Payment Required".
 
 1. Create a token with *write* access at https://huggingface.co/settings/tokens.
 2. In this GitHub repository, add it as an Actions secret named `HF_TOKEN`
