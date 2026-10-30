@@ -1,37 +1,54 @@
 # Deploys murattil/ to a Hugging Face Space (Docker), which gives the app a public https link.
 #
-# One-time setup:
+# One-time setup (no merge needed — this runs from the app's own branch):
 #   1. Create a Hugging Face account and an access token with "write" permission
 #      (https://huggingface.co/settings/tokens).
 #   2. In this GitHub repository: Settings → Secrets and variables → Actions → New repository
 #      secret: HF_TOKEN = the token.
-#   3. Actions → "Deploy Murattil to Hugging Face" → Run workflow, entering the Space name
-#      (e.g. your-username/murattil). The Space is created if it does not exist.
+#   3. Actions → "Deploy Murattil to Hugging Face" → open the latest run → "Re-run all jobs"
+#      (or push any change to the branch). The Space <your-hf-username>/murattil is created.
+#      To use another Space name, add a repository variable HF_SPACE (e.g. your-name/my-space).
 # The Space builds the Docker image (about 15–25 minutes the first time, including the model
-# weights) and then serves the app at https://<your-username>-murattil.hf.space
+# weights) and then serves the app at https://<your-hf-username>-murattil.hf.space
 name: Deploy Murattil to Hugging Face
 
 on:
+  push:
+    branches: [claude/quran-voice-tajweed-app-m8ylt4]
+    paths: ["murattil/**", ".github/workflows/murattil-huggingface.yml"]
   workflow_dispatch:
     inputs:
       space:
-        description: "Space id, e.g. your-username/murattil (free CPU Basic hardware is enough)"
-        required: true
+        description: "Space id (optional), e.g. your-hf-username/murattil"
+        required: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check for the Hugging Face token
+        id: token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "::notice::Not deployed: add the HF_TOKEN repository secret (see the top of .github/workflows/murattil-huggingface.yml), then re-run this workflow."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.token.outputs.ready == 'true'
       - uses: actions/setup-python@v5
+        if: steps.token.outputs.ready == 'true'
         with:
           python-version: "3.12"
       - name: Upload to the Space
+        if: steps.token.outputs.ready == 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          SPACE: ${{ inputs.space }}
+          SPACE: ${{ inputs.space || vars.HF_SPACE }}
         run: |
-          test -n "$HF_TOKEN" || { echo "Add the HF_TOKEN repository secret first (see the comments at the top of this file)."; exit 1; }
           pip install --quiet "huggingface_hub>=0.30"
           # the Space gets the app folder, with the Space card as its README
           rsync -a --exclude server/.venv --exclude server/var --exclude server/models --exclude web/node_modules \
@@ -41,7 +58,7 @@ jobs:
           import os
           from huggingface_hub import HfApi
           api = HfApi(token=os.environ["HF_TOKEN"])
-          space = os.environ["SPACE"]
+          space = os.environ.get("SPACE") or f"{api.whoami()['name']}/murattil"
           api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
           # the Space page shows the app in a frame; allow that frame (and its session cookie)
           api.add_space_variable(space, "MURATTIL_FRAME_ANCESTORS", "https://huggingface.co")
@@ -49,6 +66,9 @@ jobs:
                             commit_message=f"Deploy {os.environ.get('GITHUB_SHA', '')[:7]}")
           user, name = space.split("/", 1)
           host = f"{user}-{name}".lower().replace("_", "-").replace(".", "-")
-          print(f"Deployed. The Space is building; the app will be at https://{host}.hf.space "
-                f"(page: https://huggingface.co/spaces/{space})")
+          msg = (f"Deployed. The Space is building (15-25 min the first time). "
+                 f"App: https://{host}.hf.space  Space page: https://huggingface.co/spaces/{space}")
+          print(msg)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(msg + "\n")
           PY

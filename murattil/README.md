@@ -137,14 +137,17 @@ professional EveryAyah recording stood in for his full-surah file.
 
 ## Put it online
 
-**Hugging Face Spaces (free CPU tier, public https link):**
+**Hugging Face Spaces (free CPU tier, public https link)** — no merge needed:
 
 1. Create a token with *write* access at https://huggingface.co/settings/tokens.
-2. In this GitHub repository, add it as an Actions secret named `HF_TOKEN`.
-3. Run **Actions → Deploy Murattil to Hugging Face**, entering a Space name such as `your-name/murattil`.
+2. In this GitHub repository, add it as an Actions secret named `HF_TOKEN`
+   (Settings → Secrets and variables → Actions).
+3. Open **Actions → Deploy Murattil to Hugging Face**, open the latest run, and click
+   **Re-run all jobs**. Any later push to the branch also deploys.
 
-The first build takes about 15–25 minutes, including the model weights. The app is then served at
-`https://your-name-murattil.hf.space`.
+The Space `<your-hf-username>/murattil` is created on the first run. The first build takes about
+15–25 minutes, including the model weights. The app is then served at
+`https://<your-hf-username>-murattil.hf.space`, and the run summary shows the link.
 
 **Any Docker host:**
 
